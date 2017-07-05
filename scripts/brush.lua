@@ -4,7 +4,7 @@
 --
 --  Oblige Level Maker
 --
---  Copyright (C) 2006-2015 Andrew Apted
+--  Copyright (C) 2006-2017 Andrew Apted
 --
 --  This program is free software; you can redistribute it and/or
 --  modify it under the terms of the GNU General Public License
@@ -83,6 +83,19 @@ function raw_add_model(model)
 end
 
 
+function Action_lookup(action)
+  assert(action)
+
+  local info = GAME.ACTIONS[action]
+
+  if not info then
+    error("Unknown action: " .. tostring(action))
+  end
+
+  return info.id
+end
+
+
 ------------------------------------------------------------------------
 --  Ambient Lighting
 ------------------------------------------------------------------------
@@ -101,7 +114,7 @@ function Ambient_push(value)
 end
 
 
-function Ambient_pop(value)
+function Ambient_pop()
   if table.empty(AMBIENT_LIGHT) then
     error("Ambient_pop : stack is empty")
   else
@@ -226,10 +239,12 @@ function Trans.apply_slope(slope)
 
   slope = table.copy(slope)
 
-  slope.x1, slope.y1 = Trans.apply_xy(slope.x1, slope.y1)
-  slope.x2, slope.y2 = Trans.apply_xy(slope.x2, slope.y2)
+  if T.mirror_x then slope.nx = - slope.nx end
+  if T.mirror_y then slope.ny = - slope.ny end
 
-  slope.dz = slope.dz * (T.scale_z or 1)
+  if T.rotate then
+    slope.nx, slope.ny = geom.rotate_vec(slope.nx, slope.ny, T.rotate)
+  end
 
   return slope
 end
@@ -290,8 +305,22 @@ end
 
 
 
+function Trans.remap_entity(name)
+  if THEME.entity_remap and name != nil then
+    return THEME.entity_remap[name] or name
+  end
+
+  return name
+end
+
+
+
 function Trans.entity(name, x, y, z, props)
   assert(name)
+
+  name = Trans.remap_entity(name)
+
+  if name == "nothing" then return end
 
   if not props then
     props = {}
@@ -476,7 +505,7 @@ function Mat_lookup_flat(name)
 
   if not mat then
     gui.printf("\nLACKING MATERIAL : %s\n\n", name)
-    
+
     -- prevent further messages (create a new material)
     local src_mat = assert(GAME.MATERIALS["_DEFAULT"])
 
@@ -564,7 +593,7 @@ function brushlib.dump(brush, title)
       end
 
       if pos then
-        table.insert(field_list, pos, name) 
+        table.insert(field_list, pos, name)
       else
         table.insert(field_list, name)
       end
@@ -574,7 +603,7 @@ function brushlib.dump(brush, title)
 
     each name in field_list do
       local val = C[name]
-      
+
       if _index > 1 then line = line .. ", " end
 
       line = line .. string.format("%s=%s", name, tostring(val))
@@ -703,6 +732,34 @@ function brushlib.get_top_h(brush)
 end
 
 
+function brushlib.slope_top(brush, nx, ny, nz)
+  assert(nz > 0)
+
+  each C in brush do
+    if C.t then
+      C.slope = { nx=nx, ny=ny, nz=nz }
+      return
+    end
+  end
+
+  error("add_top_slope: brush has no top!")
+end
+
+
+function brushlib.slope_bottom(brush, nx, ny, nz)
+  assert(nz < 0)
+
+  each C in brush do
+    if C.b then
+      C.slope = { nx=nx, ny=ny, nz=nz }
+      return
+    end
+  end
+
+  error("add_bottom_slope: brush has no bottom!")
+end
+
+
 function brushlib.set_tex(brush, wall, flat)
   each C in brush do
     if wall and C.x and not C.tex then
@@ -726,7 +783,7 @@ function brushlib.set_mat(brush, wall, flat)
 
     if flat == "_LIQUID" and LEVEL.liquid then
       each C in brush do
-        if C.b or C.t then
+        if C.t then
           C.special   = C.special   or LEVEL.liquid.special
           C.light_add = C.light_add or LEVEL.liquid.light_add
         end
@@ -742,6 +799,178 @@ function brushlib.set_mat(brush, wall, flat)
   end
 
   brushlib.set_tex(brush, wall, flat)
+end
+
+
+function brushlib.set_y_offset(brush, y_offset)
+  each C in brush do
+    if C.x then
+      C.v1 = y_offset
+    end
+  end
+end
+
+
+function brushlib.q3_liquid(brush, medium, top_tex)
+  brushlib.set_kind(brush, "liquid", { detail=1, medium=medium })
+
+  -- only top face has a real texture
+  brushlib.set_tex(brush, "nothing")
+
+  each C in brush do
+    if C.t then
+       C.tex = top_tex
+    end
+  end
+end
+
+
+function brushlib.rail_brush(x1,y1, x2,y2, z, side_props)
+  -- compute coords for other side of brush
+  local x3, y3 = x2, y2
+  local x4, y4 = x1, y1
+
+  if math.abs(x2 - x1) >= math.abs(y2 - y1) then
+    -- move vertically away
+
+    if x2 > x1 then
+      y3 = math.max(y1, y2) + 8
+      y3 = math.ceil(y3 / 128) * 128
+      y4 = y3
+    else
+      y3 = math.min(y1, y2) - 8
+      y3 = math.floor(y3 / 128) * 128
+      y4 = y3
+    end
+
+  else
+    -- move horizontally away
+
+    if y2 > y1 then
+      x3 = math.min(x1, x2) - 8
+      x3 = math.floor(x3 / 128) * 128
+      x4 = x3
+    else
+      x3 = math.max(x1, x2) + 8
+      x3 = math.ceil(x3 / 128) * 128
+      x4 = x3
+    end
+  end
+
+  -- create the brush
+  local brush =
+  {
+    { x=x1, y=y1 }
+    { x=x2, y=y2 }
+    { x=x3, y=y3 }
+    { x=x4, y=y4 }
+  }
+
+  if side_props then
+    table.merge(brush[1], side_props)
+  end
+
+  brushlib.set_kind(brush, "rail")
+
+  table.insert(brush, { b=z })
+
+  return brush
+end
+
+
+function brushlib.solve_equation(X1,Y1,R1, X2,Y2,R2, X3,Y3,R3)
+  --
+  -- given the three simultaneous equations:
+  --    X1*a + Y1*b + c = R1
+  --    X2*a + Y2*b + c = R2
+  --    X3*a + Y3*b + c = R3
+  --
+  -- computes and returns: a, b, c
+  --
+
+  local a_num = (Y2 - Y1) * (R3 - R1) - (Y3 - Y1) * (R2 - R1)
+  local a_den = (Y2 - Y1) * (X3 - X1) - (Y3 - Y1) * (X2 - X1)
+
+  local b_num = (X2 - X1) * (R3 - R1) - (X3 - X1) * (R2 - R1)
+  local b_den = (X2 - X1) * (Y3 - Y1) - (X3 - X1) * (Y2 - Y1)
+
+  -- zero denominators should not occur, as that indicates a
+  -- degenerate triangle (e.g. two points at same location).
+  -- but we handle it anyway.
+
+  local a, b, c
+
+  if math.abs(a_den) < 0.0001 then
+    a = 0
+  else
+    a = a_num / a_den
+  end
+
+  if math.abs(b_den) < 0.0001 then
+    b = 0
+  else
+    b = b_num / b_den
+  end
+
+  c = R1 - (X1 * a) - (Y1 * b)
+
+--[[
+  -- DEBUGGING : check that alternate ways of computing 'c' gives
+  --             the same result.
+
+  local c2 = R2 - (X2 * a) - (Y2 * b)
+  local c3 = R3 - (X3 * a) - (Y3 * b)
+
+  -- TODO
+--]]
+
+  return a, b, c
+end
+
+
+function brushlib.calc_uv_vector(mode, x1,y1,z1,r1, x2,y2,z2,r2,
+                                 x3,y3,z3,r3, out_mat)
+
+  -- mode can be "xy", "xz" or "yz"
+  -- [ the other coordinate is linearly dependent on those two
+  --   since a triangle always lies on a plane ]
+
+  if mode == "xz" then
+    y1, y2, y3 = z1, z2, z3
+
+  elseif mode == "yz" then
+    x1, x2, x3 = y1, y2, y3
+    y1, y2, y3 = z1, z2, z3
+  end
+
+  local a,b,c = brushlib.solve_equation(x1,y1,r1, x2,y2,r2, x3,y3,r3)
+
+  out_mat[4] = c
+
+  if mode == "xy" then
+    out_mat[1] = a
+    out_mat[2] = b
+    out_mat[3] = 0
+
+  elseif mode == "xz" then
+    out_mat[1] = a
+    out_mat[2] = 0
+    out_mat[3] = b
+
+  else
+    out_mat[1] = 0
+    out_mat[2] = a
+    out_mat[3] = b
+  end
+end
+
+
+function brushlib.combine_uv_matrix(u_mat, v_mat)
+  return
+  {
+    u_mat[1], u_mat[2], u_mat[3], u_mat[4],
+    v_mat[1], v_mat[2], v_mat[3], v_mat[4]
+  }
 end
 
 
@@ -870,5 +1099,157 @@ function brushlib.line_passes_through(brush, px1, py1, px2, py2)
   end
 
   return false
+end
+
+
+------------------------------------------------------------------------
+--  STUFF FOR TESTING THE CSG CODE
+------------------------------------------------------------------------
+
+function Quake3_test()
+
+--- Trans.set({ rotate=30 })
+
+  local F = brushlib.quad(0, 128, 256, 384,  -24, 0)
+  local C = brushlib.quad(0, 128, 256, 384,  192, 208)
+
+  local W = brushlib.quad(0,   128,  32, 384,  0, 192)
+  local E = brushlib.quad(224, 128, 256, 384,  0, 192)
+  local S = brushlib.quad(0,   128, 256, 144,  0, 192)
+  local N = brushlib.quad(0,   370, 256, 384,  0, 192)
+
+
+  -- slope test --
+
+  if false then
+    F = brushlib.quad(32, 144, 224, 370, -256,   0)
+    C = brushlib.quad(32, 144, 224, 370,  192, 512)
+
+    W = brushlib.quad(0,   128,  32, 384, -256, 512)
+    E = brushlib.quad(224, 128, 256, 384, -256, 512)
+    S = brushlib.quad(0,   128, 256, 144, -256, 512)
+    N = brushlib.quad(0,   370, 256, 384, -256, 512)
+
+    brushlib.slope_top(F, 0.3, 0.0, 1.0)
+
+    brushlib.slope_bottom(C, 0.0, 0.7, -1.0)
+  end
+
+
+  local F_tex = "base_floor/clang_floor_s2"
+  local C_tex = "cosmo_floor/bfloor3"
+  local W_tex = "gothic_block/blocks15"
+
+  brushlib.set_tex(F, F_tex, F_tex)
+  brushlib.set_tex(C, C_tex, C_tex)
+
+  brushlib.set_tex(N, W_tex, W_tex)
+  brushlib.set_tex(S, W_tex, W_tex)
+  brushlib.set_tex(E, W_tex, W_tex)
+  brushlib.set_tex(W, W_tex, W_tex)
+
+
+  Trans.brush(F) ; Trans.brush(C)
+  Trans.brush(S) ; Trans.brush(N)
+  Trans.brush(W) ; Trans.brush(E)
+
+
+  Trans.entity("player1", 80, 256, 130)
+  Trans.entity("light",   80, 256, 160, { radius=200 })
+
+
+  -- corner test --
+
+  if false then
+    local P_tex = "base_trim/pewter_shiney"
+
+    local P = brushlib.quad(128, 256, 224, 370, 0, 170)
+
+    brushlib.set_tex(P, P_tex, P_tex)
+
+--  brushlib.slope_top(P, -1, -1, 1.4)
+
+    Trans.brush(P)
+  end
+
+
+  -- clip test --
+
+  if false then
+    local P_tex = "common/clip"
+
+    local P = brushlib.quad(192, 140, 224, 370, 0, 31)
+
+    brushlib.set_tex(P, P_tex, P_tex)
+    brushlib.set_kind(P, "clip")
+
+    Trans.brush(P)
+  end
+
+
+  -- liquid test --
+
+  if false then
+    local L_tex = "liquids/hydrowater"
+
+    gui.property("water_shader", L_tex)
+
+    local L = brushlib.quad(0, 128, 256, 384, -1024, 64)
+
+    brushlib.q3_liquid(L, "water", L_tex)
+
+    Trans.brush(L)
+  end
+
+
+  -- model test --
+
+  if false then
+    -- create an entity table.
+    -- the 'link_id' field must be unique, and links brushes to the entity.
+    -- the coordinates will be unused.
+    local ent =
+    {
+      id = "func_static"
+
+      link_id = "m1"
+
+      x = 0
+      y = 0
+      z = 0
+    }
+
+    raw_add_entity(ent)
+
+    local M_tex = "base_trim/pewter_shiney"
+    local M = brushlib.quad(170, 260, 210, 310, 30, 100)
+
+    brushlib.slope_top(M, -0.5, -0.5, 1.0)
+
+    brushlib.set_tex (M, M_tex, M_tex)
+    brushlib.set_kind(M, "solid", { link_entity=ent.link_id })
+
+    Trans.brush(M)
+  end
+end
+
+
+function Quake3_conversion()
+  each B in all_brushes do
+    if B[1].m != "xxxliquid" then
+      Trans.brush(B)
+    end
+  end
+
+  each E in all_entities do
+    if E.light then
+      E.radius = E.light * 1.5
+      E.light  = nil
+    end
+
+    if E.id != "nothing" then
+      raw_add_entity(E)
+    end
+  end
 end
 

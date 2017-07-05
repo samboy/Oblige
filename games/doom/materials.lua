@@ -15,9 +15,9 @@
 DOOM.LIQUIDS =
 {
   water  = { mat="FWATER1", light_add=16, special=0 }
-  blood  = { mat="BLOOD1",  light_add=16, special=0 }
-  nukage = { mat="NUKAGE1", light_add=16, special=5,  damage=10 }
-  lava   = { mat="LAVA1",   light_add=24, special=16, damage=20 }
+  blood  = { mat="BLOOD1",  light_add=32, special=0 }
+  nukage = { mat="NUKAGE1", light_add=32, special=5,  damage=10 }
+  lava   = { mat="LAVA1",   light_add=48, special=16, damage=20 }
 
   -- Doom II only --
   slime  = { mat="SLIME01", light_add=16, special=0 }
@@ -33,9 +33,9 @@ DOOM.MATERIALS =
 
   -- special materials --
 
-  _ERROR   = { t="METAL",    f="CEIL5_2" }
-  _DEFAULT = { t="GRAY1",    f="FLAT1" }
-  _SKY     = { t="CEMENT3",  f="F_SKY1" }
+  _ERROR   = { t="METAL",  f="CEIL5_2" }
+  _DEFAULT = { t="GRAY1",  f="FLAT1" }
+  _SKY     = { t="METAL",  f="F_SKY1" }
 
 
   -- general purpose --
@@ -48,11 +48,11 @@ DOOM.MATERIALS =
 
   -- walls --
 
-  BIGDOOR1 = { t="BIGDOOR1", f="FLAT23" }
-  BIGDOOR2 = { t="BIGDOOR2", f="FLAT1" }
-  BIGDOOR3 = { t="BIGDOOR3", f="FLOOR7_2" }
-  BIGDOOR4 = { t="BIGDOOR4", f="FLOOR3_3" }
-  BIGDOOR5 = { t="BIGDOOR5", f="FLAT5_2" }
+  BIGDOOR1 = { t="BIGDOOR1", f="FLAT19" }
+  BIGDOOR2 = { t="BIGDOOR2", f="CEIL5_1" }
+  BIGDOOR3 = { t="BIGDOOR3", f="CEIL5_1" }
+  BIGDOOR4 = { t="BIGDOOR4", f="CEIL5_1" }
+  BIGDOOR5 = { t="BIGDOOR5", f="CEIL5_2" }
   BIGDOOR6 = { t="BIGDOOR6", f="CEIL5_2" }
   BIGDOOR7 = { t="BIGDOOR7", f="CEIL5_2" }
 
@@ -182,9 +182,9 @@ DOOM.MATERIALS =
   SP_ROCK1 = { t="SP_ROCK1", f="MFLR8_3" }
 
   STARBR2  = { t="STARBR2",  f="FLOOR0_2" }
-  STARG1   = { t="STARG1",   f="FLAT23" }
-  STARG2   = { t="STARG2",   f="FLAT23" }
-  STARG3   = { t="STARG3",   f="FLAT23" }
+  STARG1   = { t="STARG1",   f="FLOOR7_2" }
+  STARG2   = { t="STARG2",   f="FLOOR7_2" }
+  STARG3   = { t="STARG3",   f="FLOOR7_2" }
   STARGR1  = { t="STARGR1",  f="FLAT3" }
   STARGR2  = { t="STARGR2",  f="FLAT3" }
   STARTAN2 = { t="STARTAN2", f="FLOOR4_1" }
@@ -228,6 +228,7 @@ DOOM.MATERIALS =
   SW1BRN2  = { t="SW1BRN2",  f="FLOOR0_1" }
   SW1BRNGN = { t="SW1BRNGN", f="FLOOR7_1" }
   SW1BROWN = { t="SW1BROWN", f="FLOOR7_1" }
+  SW1CMT   = { t="SW1CMT",   f="FLAT1" }
   SW1COMM  = { t="SW1COMM",  f="FLAT23" }
   SW1COMP  = { t="SW1COMP",  f="CEIL5_1" }
   SW1DIRT  = { t="SW1DIRT",  f="FLOOR7_1" }
@@ -248,7 +249,7 @@ DOOM.MATERIALS =
   SW1STRTN = { t="SW1STRTN", f="FLOOR4_1" }
   SW1VINE  = { t="SW1VINE",  f="FLAT1" }
   SW1WOOD  = { t="SW1WOOD",  f="FLAT5_2" }
-  
+
 
   -- floors --
 
@@ -329,7 +330,7 @@ DOOM.MATERIALS =
   GATE2    = { f="GATE2", t="METAL" }
   GATE3    = { f="GATE3", t="METAL" }
   GATE4    = { f="GATE4", t="METAL" }
-  
+
   MFLR8_1  = { f="MFLR8_1", t="STONE2" }
   MFLR8_2  = { f="MFLR8_2", t="BROWNHUG" }
   MFLR8_3  = { f="MFLR8_3", t="SP_ROCK1" }
@@ -338,7 +339,7 @@ DOOM.MATERIALS =
   SFLR6_4  = { f="SFLR6_4", t="SKSNAKE2" }
   SFLR7_1  = { f="SFLR7_1", t="SKSNAKE1" }
   SFLR7_4  = { f="SFLR7_4", t="SKSNAKE1" }
-  
+
   F_STEP1  = { f="STEP1", t="SHAWN2" }
   F_STEP2  = { f="STEP2", t="SHAWN2" }
 
@@ -376,6 +377,9 @@ DOOM.MATERIALS =
 
   O_BLACK  = { t="CEMENT5",  f="O_BLACK",  sane=1 }
 
+  -- new flat, added by data/lift_flat.wad
+  LIFTFLAT = { f="LIFTFLAT", t="SUPPORT2" }
+
 
   -- Missing stuff:
   --   CEMENT#  : used by OBLIGE for various logos
@@ -383,7 +387,7 @@ DOOM.MATERIALS =
   --
   -- Note too that STEP1/2 are ambiguous, the flats are quite
   -- different to the textures, hence renamed the flats as
-  -- F_STEP1 and F_STEP2.
+  -- F_STEP1 and F_STEP2 here.
 
 
   -----------------------------------
@@ -540,10 +544,12 @@ DOOM.MATERIALS =
   ZIMMER5  = { t="ZIMMER5",  f="RROCK16" }
   ZIMMER7  = { t="ZIMMER7",  f="RROCK20" }
   ZIMMER8  = { t="ZIMMER8",  f="MFLR8_3" }
-                          
+
   ZDOORB1  = { t="ZDOORB1",  f="FLAT23" }
   ZDOORF1  = { t="ZDOORF1",  f="FLAT23" }
   ZELDOOR  = { t="ZELDOOR",  f="FLAT23" }
+
+  ZZZFACE4 = { t="ZZZFACE4", f="CEIL5_1" }
 
   ZZWOLF1  = { t="ZZWOLF1",  f="FLAT18" }
   ZZWOLF2  = { t="ZZWOLF2",  f="FLAT18" }
@@ -594,11 +600,12 @@ DOOM.MATERIALS =
   GRNLITE1 = { f="GRNLITE1", t="TEKGREN2" }
   MFLR8_4  = { f="MFLR8_4",  t="ASHWALL2" }
 
-  RROCK01  = { f="RROCK01", t="CRACKLE2" }
+  RROCK01  = { f="RROCK01", t="ROCKRED1" }
   RROCK02  = { f="RROCK02", t="CRACKLE4" }
   RROCK03  = { f="RROCK03", t="ASHWALL3" }
   RROCK04  = { f="RROCK04", t="ASHWALL3" }
-  RROCK05  = { f="RROCK05", t="ROCKRED1" }  -- animated
+  RROCK05  = { f="RROCK05", t="ROCKRED1" } -- animated (using 05..08)
+
   RROCK09  = { f="RROCK09", t="TANROCK4" }
   RROCK10  = { f="RROCK10", t="BRICK1" }
   RROCK11  = { f="RROCK11", t="BSTONE1" }
@@ -649,38 +656,12 @@ DOOM.MATERIALS =
 
 --------------------------------------------------
 
-DOOM.PREFAB_DEFAULTS =
+DOOM.PREFAB_FIELDS =
 {
-  tex_DOORTRAK = "?track"
-
-  -- this allow players to be remapped or removed
-  -- (e.g. non-standard players can be removed if not supported)
-  thing_1 = "?p1"
-  thing_2 = "?p2"
-  thing_3 = "?p3"
-  thing_4 = "?p4"
-
-  thing_4001 = "?p5"
-  thing_4002 = "?p6"
-  thing_4003 = "?p7"
-  thing_4004 = "?p8"
 }
 
 
 DOOM.SKIN_DEFAULTS =
 {
-  track = "DOORTRAK"
-
-  big_door = "BIGDOOR2"
-
-  p1 = "player1"
-  p2 = "player2"
-  p3 = "player3"
-  p4 = "player4"
-
-  p5 = "player5"
-  p6 = "player6"
-  p7 = "player7"
-  p8 = "player8"
 }
 

@@ -479,7 +479,7 @@ static void Q2_WriteFace(quake_face_c *face)
 
 	if (face->lmap)
 	{
-		raw_face.lightofs = face->lmap->CalcOffset();
+		raw_face.lightofs = face->lmap->offset;
 
 		for (int n = 0 ; n < 4 ; n++)
 			raw_face.styles[n] = face->lmap->styles[n];
@@ -495,7 +495,7 @@ static void Q2_WriteFace(quake_face_c *face)
 	if (face->flags & FACE_F_Liquid)
 		flags |= SURF_WARP | SURF_TRANS66;
 
-	raw_face.texinfo = Q2_AddTexInfo(texture, flags, 0, face->s, face->t);
+	raw_face.texinfo = Q2_AddTexInfo(texture, flags, 0, face->uv_mat.s, face->uv_mat.t);
 
 
 	DoWriteFace(raw_face);
@@ -544,8 +544,7 @@ static void Q2_WriteLeaf(quake_leaf_c *leaf)
 	SYS_ASSERT(leaf->medium >= 0);
 	SYS_ASSERT(leaf->medium <= MEDIUM_SOLID);
 
-	if (leaf == qk_solid_leaf)
-		return;
+	SYS_ASSERT(leaf != qk_solid_leaf);
 
 
 	dleaf2_t raw_leaf;
@@ -579,9 +578,9 @@ static void Q2_WriteLeaf(quake_leaf_c *leaf)
 	raw_leaf.first_leafbrush = q2_total_leaf_brushes;
 	raw_leaf.num_leafbrushes = 0;
 
-	for (unsigned int k = 0 ; k < leaf->solids.size() ; k++)
+	for (unsigned int k = 0 ; k < leaf->brushes.size() ; k++)
 	{
-		Q2_WriteLeafBrush(leaf->solids[k]);
+		Q2_WriteLeafBrush(leaf->brushes[k]);
 
 		raw_leaf.num_leafbrushes += 1;
 	}
@@ -828,7 +827,7 @@ static void Q2_Model_Face(quake_mapmodel_c *model, int face, s16_t plane, bool f
 	raw_face.styles[2] = 0xFF;
 	raw_face.styles[3] = 0xFF;
 
-	raw_face.lightofs = QCOM_FlatLightOffset(MODEL_LIGHT);
+	raw_face.lightofs = 0;  // a shared lightmap at very start
 
 
 	DoWriteBrushSide(raw_face.planenum ^ raw_face.side, raw_face.texinfo);
@@ -1030,9 +1029,9 @@ static void Q2_LightWorld()
 	if (main_win)
 		main_win->build_box->Prog_Step("Light");
 
-	QCOM_LightAllFaces();
+	QLIT_LightAllFaces();
 
-	QCOM_BuildLightingLump(LUMP_LIGHTING, MAX_MAP_LIGHTING);
+	QLIT_BuildLightingLump(LUMP_LIGHTING, MAX_MAP_LIGHTING);
 }
 
 
@@ -1043,14 +1042,12 @@ static void Q2_VisWorld()
 
 	// no need for numleafs, as Quake II uses clusters directly
 
-	QCOM_Visibility(LUMP_VISIBILITY, MAX_MAP_VISIBILITY, 0);
+	QVIS_Visibility(LUMP_VISIBILITY, MAX_MAP_VISIBILITY, 0);
 }
 
 
 static void Q2_CreateBSPFile(const char *name)
 {
-	qk_color_lighting = true;
-
 	BSP_OpenLevel(name);
 
 	Q2_DummyArea();
@@ -1115,7 +1112,10 @@ bool quake2_game_interface_c::Start()
 {
 	qk_game = 2;
 	qk_sub_format = 0;
-	qk_lighting_quality = fast_lighting ? -1 : +1;
+
+	CLUSTER_SIZE = 128.0;
+
+	QLIT_InitProperties();
 
 	if (batch_mode)
 		filename = StringDup(batch_output_file);
@@ -1180,15 +1180,6 @@ void quake2_game_interface_c::Property(const char *key, const char *value)
 	else if (StringCaseCmp(key, "description") == 0)
 	{
 		description = StringDup(value);
-	}
-	else if (StringCaseCmp(key, "lighting_quality") == 0)
-	{
-		if (StringCaseCmp(value, "low") == 0)
-			qk_lighting_quality = -1;
-		else if (StringCaseCmp(value, "high") == 0)
-			qk_lighting_quality = +1;
-		else
-			qk_lighting_quality = 0;
 	}
 	else
 	{

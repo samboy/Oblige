@@ -25,11 +25,6 @@ HERETIC.THEMES =
       k_blue   = 30
     }
 
-    ___switches =  -- FIXME
-    {
-      sw_metal = 50
-    }
-
     fences =
     {
       BRWNRCKS = 20
@@ -82,22 +77,6 @@ HERETIC.THEMES =
 
 HERETIC.ROOM_THEMES =
 {
-  any_Stairwell =
-  {
-    env = "stairwell"
-
-    walls =
-    {
-      WOODWL = 50
-    }
-
-    floors =
-    {
-      FLOOR03 = 30
-    }
-  }
-
-
   -- TODO: one for each major theme
   any_Hallway =
   {
@@ -240,7 +219,7 @@ HERETIC.ROOM_THEMES =
 
   h_urban_Outdoors =
   {
-    env = "outdoors"
+    env = "outdoor"
 
     floors =
     {
@@ -349,7 +328,7 @@ HERETIC.ROOM_THEMES =
 
   h_castle_Outdoors =
   {
-    env = "outdoors"
+    env = "outdoor"
 
     floors =
     {
@@ -378,7 +357,7 @@ HERETIC.ROOMS =
 {
   GENERIC =
   {
-    environment = "any"
+    env = "any"
   }
 }
 

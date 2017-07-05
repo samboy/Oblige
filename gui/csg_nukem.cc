@@ -354,7 +354,7 @@ static void NK_MakeSector(region_c *R)
 
 
 
-	if (T->bkind == BKIND_Sky)
+	if (T->bflags & BFLAG_Sky)
 	{
 		S->ceil.flags |= SECTOR_F_PARALLAX;
 	}
@@ -783,8 +783,6 @@ void CSG_NUKEM_Write()
 	nk_all_walls.clear();
 
 	CSG_BSP(1.0);
-
-	CSG_MakeMiniMap();
 
 	NK_CreateSectors();
 	NK_PartnerWalls();

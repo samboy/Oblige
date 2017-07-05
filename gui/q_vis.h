@@ -62,8 +62,6 @@ public:
 
 /***** VARIABLES **********/
 
-#define CLUSTER_SIZE  192.0
-
 extern int cluster_X, cluster_Y;
 extern int cluster_W, cluster_H;
 
@@ -72,20 +70,23 @@ extern qCluster_c ** qk_clusters;
 
 /***** FUNCTIONS **********/
 
-void QCOM_MakeTraceNodes();
-void QCOM_FreeTraceNodes();
+void QVIS_MakeTraceNodes();
+void QVIS_FreeTraceNodes();
 
 // returns true if OK, false if blocked
-bool QCOM_TraceRay(float x1, float y1, float z1,
+bool QVIS_TraceRay(float x1, float y1, float z1,
                    float x2, float y2, float z2);
 
-void QCOM_CreateClusters(double min_x, double min_y,
+// returns true if point is in air, false for solid or sky
+bool QVIS_TracePoint(float x, float y, float z);
+
+void QVIS_CreateClusters(double min_x, double min_y,
                          double max_x, double max_y);
-void QCOM_FreeClusters();
+void QVIS_FreeClusters();
 
-void QCOM_VisMarkWall(int cx, int cy, int side);
+void QVIS_MarkWall(int cx, int cy, int side);
 
-void QCOM_Visibility(int lump, int max_size, int numleafs);
+void QVIS_Visibility(int lump, int max_size, int numleafs);
 
 #endif /* __QUAKE_VIS_H__ */
 

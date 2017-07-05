@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2016 Andrew Apted
+//  Copyright (C) 2006-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -23,8 +23,8 @@
 
 #define OBLIGE_TITLE  "OBLIGE Level Maker"
 
-#define OBLIGE_VERSION  "7.37"
-#define OBLIGE_HEX_VER  0x737
+#define OBLIGE_VERSION  "7.57"
+#define OBLIGE_HEX_VER  0x757
 
 
 #define CONFIG_FILENAME   "CONFIG.txt"
@@ -59,11 +59,13 @@ extern int main_action;
 
 
 // Misc Options
-extern bool alternate_look;
 extern  int window_size;    // 0 = Auto, 1 = Tiny ... 5 = Huge
+extern bool alternate_look;
+extern bool wheel_can_bump;
+
 extern bool create_backups;
+extern bool overwrite_warning;
 extern bool debug_messages;
-extern bool fast_lighting;
 
 
 #ifdef __GNUC__
@@ -83,9 +85,11 @@ const char * DLG_OutputFilename(const char *ext);
 
 void DLG_AboutText(void);
 void DLG_OptionsEditor(void);
-void DLG_ManageConfig(void);
-void DLG_EditSeed(void);
 void DLG_SelectAddons(void);
+
+void DLG_EditSeed(void);
+void DLG_ViewLogs(void);
+void DLG_ManageConfig(void);
 
 
 class game_interface_c
@@ -147,6 +151,7 @@ game_interface_c * Doom_GameObject();
 game_interface_c * Nukem_GameObject();
 game_interface_c * Quake1_GameObject();
 game_interface_c * Quake2_GameObject();
+game_interface_c * Quake3_GameObject();
 
 
 #endif /* __OBLIGE_MAIN_H__ */

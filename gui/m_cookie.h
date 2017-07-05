@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2015 Andrew Apted
+//  Copyright (C) 2006-2016 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -24,7 +24,7 @@
 bool Cookie_Load(const char *filename);
 bool Cookie_Save(const char *filename);
 
-bool Cookie_LoadString(const char *str);
+bool Cookie_LoadString(const char *str, bool _keep_seed);
 
 void Cookie_ParseArguments(void);
 

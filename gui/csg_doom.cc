@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2016 Andrew Apted
+//  Copyright (C) 2006-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -47,11 +47,11 @@ int ef_thing_mode;
 
 
 // valid after DM_CreateLinedefs()
-static int map_bound_x1;
-static int map_bound_y1;
+static int map_bound_x1, map_bound_x2;
+static int map_bound_y1, map_bound_y2;
 
-
-#define SIMPLE_Y_OFFSETS  1
+static int dummy_pos_x;
+static int dummy_pos_y;
 
 
 #define SEC_FLOOR_SPECIAL  (1 << 1)
@@ -155,6 +155,8 @@ public:
 
 	bool unused;
 
+	bool is_cave;
+
 	std::vector<extrafloor_c *> exfloors;
 
 	std::vector<doom_sector_c *> ef_neighbors;
@@ -164,7 +166,7 @@ public:
 		f_h(0), c_h(0), f_tex(), c_tex(),
 		light(0), special(0), tag(0), mark(0), index(-1),
 		region(NULL), misc_flags(0), valid_count(0),
-		light2(0), unused(false),
+		light2(0), unused(false), is_cave(false),
 		exfloors(), ef_neighbors()
 	{ }
 
@@ -973,6 +975,8 @@ static void DM_MakeSector(region_c *R)
 
 	S->sound_area = f_face->getInt("sound_area");
 
+	S->is_cave = (f_face->getInt("is_cave") > 0);
+
 
 	// floors have priority over ceilings
 	int f_special = f_face->getInt("special");
@@ -1138,6 +1142,8 @@ static int DM_CoalescePass()
 
 				N->index = R->index;
 
+				D1->is_cave |= D2->is_cave;
+
 				changes++;
 			}
 		}
@@ -1221,87 +1227,11 @@ static int NormalizeYOffset(int oy)
 }
 
 
-#ifndef SIMPLE_Y_OFFSETS
-static int Default_ZA(csg_brush_c *B)
-{
-	// default anchor point for a brush
-
-	int z1 = I_ROUND(B->b.z);
-	int z2 = I_ROUND(B->t.z);
-
-	if (z2 < EXTREME_H - 100)
-		return z2;
-	
-	if (z1 > 100 - EXTREME_H)
-		return z1;
-	
-	return 0;
-}
-#endif
-
-
-static int CalcYOffset_1S(brush_vert_c *V, int oy, int ceil_h,
-						  int za, bool unpeg_L)
-{
-#ifdef SIMPLE_Y_OFFSETS
-	return oy;
-#else
-	if (unpeg_L)
-		return oy;
-
-	csg_brush_c *B = V->parent;
-
-	if (za == IVAL_NONE)
-		za = Default_ZA(B);
-
-	return za - ceil_h + oy;
-#endif
-}
-
-
-static int CalcYOffset_Lower(brush_vert_c *V, int oy, int ceil_h,
-							 int za, bool unpeg_L)
-{
-#ifdef SIMPLE_Y_OFFSETS
-	return oy;
-#else
-	if (! unpeg_L)  // pegged, i.e. rendered top-down
-		return oy;
-
-	csg_brush_c *B = V->parent;
-
-	if (za == IVAL_NONE)
-		za = Default_ZA(B);
-
-	return za - ceil_h + oy;
-#endif
-}
-
-
-static int CalcYOffset_Upper(brush_vert_c *V, int oy, int ceil_h,
-							 int za, bool unpeg_U)
-{
-#ifdef SIMPLE_Y_OFFSETS
-	return oy;
-#else
-	if (! unpeg_U)	// pegged, i.e. rendered bottom-up (doors)
-		return oy;
-
-	csg_brush_c *B = V->parent;
-
-	if (za == IVAL_NONE)
-		za = Default_ZA(B);
-
-	return za - ceil_h + oy;
-#endif
-}
-
-
 static doom_sidedef_c * DM_MakeSidedef(
 	doom_linedef_c *L,
 	doom_sector_c *sec, doom_sector_c *back,
 	snag_c *snag, snag_c *other,
-	brush_vert_c *rail, int rail_side,
+	brush_vert_c *rail,
 	bool unpeg_L, bool unpeg_U)
 {
 	if (! sec)
@@ -1348,13 +1278,11 @@ static doom_sidedef_c * DM_MakeSidedef(
 			int ox = lower->face.getInt("u1", IVAL_NONE);
 			int oy = lower->face.getInt("v1", IVAL_NONE);
 
-			int za = lower->face.getInt("za", IVAL_NONE);
-
 			if (ox != IVAL_NONE)
 				SD->x_offset = CalcXOffset(snag, lower, ox);
 
 			if (oy != IVAL_NONE)
-				SD->y_offset = CalcYOffset_1S(lower, oy, sec->c_h, za, unpeg_L);
+				SD->y_offset = oy;
 		}
 	}
 	else
@@ -1373,22 +1301,25 @@ static doom_sidedef_c * DM_MakeSidedef(
 
 		int l_ox = IVAL_NONE;
 		int l_oy = IVAL_NONE;
-		int l_za = IVAL_NONE;
 
 		int u_ox = IVAL_NONE;
 		int u_oy = IVAL_NONE;
-		int u_za = IVAL_NONE;
 
 		if (rail)
 		{
-			const char *rail_tex = rail->face.getStr(rail_side ? "back_rail" : "rail", NULL);
+			const char *rail_tex = rail->face.getStr("tex", NULL);
 
 			if (rail_tex)
 			{
 				SD->mid = rail_tex;
 
-				r_ox = rail->face.getInt(rail_side ? "back_u1" : "u1", IVAL_NONE);
-				r_oy = rail->face.getInt(rail_side ? "back_v1" : "v1", IVAL_NONE);
+				r_ox = rail->face.getInt("u1", IVAL_NONE);
+				r_oy = rail->face.getInt("v1", 0);
+
+				// adjust Y-offset for higher floor than expected
+				int sec_max_z = MAX(sec->f_h, back->f_h);
+
+				r_oy += I_ROUND(rail->parent->b.z) - sec_max_z;
 			}
 		}
 
@@ -1397,14 +1328,12 @@ static doom_sidedef_c * DM_MakeSidedef(
 			l_ox = lower->face.getInt("u1", IVAL_NONE);
 			// on a moving brush, default Y offset is zero
 			l_oy = lower->face.getInt("v1", l_brush->props.getInt("mover") ? 0 : IVAL_NONE);
-			l_za = lower->face.getInt("za", IVAL_NONE);
 		}
 
 		if (upper)
 		{
 			u_ox = upper->face.getInt("u1", IVAL_NONE);
 			u_oy = upper->face.getInt("v1", u_brush->props.getInt("mover") ? 0 : IVAL_NONE);
-			u_za = upper->face.getInt("za", IVAL_NONE);
 		}
 
 		if (back && back->f_h > sec->f_h && !rail && l_oy != IVAL_NONE)
@@ -1423,9 +1352,9 @@ static doom_sidedef_c * DM_MakeSidedef(
 		if (r_oy != IVAL_NONE)
 			SD->y_offset = r_oy;
 		else if (l_oy != IVAL_NONE)
-			SD->y_offset = CalcYOffset_Lower(lower, l_oy, sec->c_h, l_za, unpeg_L);
+			SD->y_offset = l_oy;
 		else if (u_oy != IVAL_NONE)
-			SD->y_offset = CalcYOffset_Upper(upper, u_oy, sec->c_h, u_za, unpeg_U);
+			SD->y_offset = u_oy;
 
 		// get textures, but fallback to something safe
 		if (! lower) lower = l_brush->verts[0];
@@ -1539,9 +1468,11 @@ static csg_property_set_c * DM_FindSpecial(snag_c *S, region_c *R1, region_c *R2
 }
 
 
-static brush_vert_c * DM_FindRail(const snag_c *S, const region_c *R, const region_c *N,
-                                  int *rail_side)
+static brush_vert_c * DM_FindRail(const snag_c *S, const region_c *R, const region_c *N)
 {
+	if (! S)
+		return NULL;
+
 	// railings require a two-sided line
 	if (! R || ! N || ! S->partner)
 		return NULL;
@@ -1549,29 +1480,15 @@ static brush_vert_c * DM_FindRail(const snag_c *S, const region_c *R, const regi
 	if (R->gaps.size() == 0 || N->gaps.size() == 0)
 		return NULL;
 
-	/* we only find railings from a floor brush */
-
-	const csg_brush_c *B1 = R->gaps.front()->bottom;
-	const csg_brush_c *B2 = N->gaps.front()->bottom;
-
-	for (int side = 0 ; side < 2 ; side++)
+	for (unsigned int k = 0 ; k < S->sides.size() ; k++)
 	{
-		const snag_c *test_S = (side == 0) ? S->partner : S;
+		brush_vert_c *V = S->sides[k];
 
-		for (unsigned int k = 0 ; k < test_S->sides.size() ; k++)
-		{
-			brush_vert_c *V = test_S->sides[k];
+		if (V->parent->bkind != BKIND_Rail)
+			continue;
 
-			if (! (V->parent == B1 || V->parent == B2))
-				continue;
-
-			if (V->face.getStr("rail", NULL) ||
-			    V->face.getStr("back_rail", NULL))
-			{
-				*rail_side = side;
-				return V;  // found it
-			}
-		}
+		if (V->face.getStr("tex", NULL))
+			return V;  // found it!
 	}
 
 	return NULL;
@@ -1579,14 +1496,18 @@ static brush_vert_c * DM_FindRail(const snag_c *S, const region_c *R, const regi
 
 
 static void DM_DeterminePegging(doom_linedef_c *L,
-								doom_sector_c *front, doom_sector_c *back,
+								region_c *front, region_c *back,
 								bool has_rail)
 {
+	// sanity check
+	if (front->gaps.empty())
+		return;
+
 	// one-sided?
 	// set LOWER-UNPEG only when ceiling is a door
-	if (! back)
+	if (! back || back->gaps.empty())
 	{
-		csg_brush_c *T = front->region->gaps.back() ->top;
+		csg_brush_c *T = front->gaps.back() ->top;
 
 		if (T->props.getInt("mover"))
 		{
@@ -1603,18 +1524,18 @@ static void DM_DeterminePegging(doom_linedef_c *L,
 	// Note: later we will clear LOWER-UNPEG if lower is visible and it
 	//       has a y_offset.
 
-	csg_brush_c *B1 = front->region->gaps.front()->bottom;
-	csg_brush_c *T1 = front->region->gaps.back() ->top;
+	csg_brush_c *B1 = front->gaps.front()->bottom;
+	csg_brush_c *T1 = front->gaps.back() ->top;
 
-	csg_brush_c *B2 =  back->region->gaps.front()->bottom;
-	csg_brush_c *T2 =  back->region->gaps.back() ->top;
+	csg_brush_c *B2 =  back->gaps.front()->bottom;
+	csg_brush_c *T2 =  back->gaps.back() ->top;
 
 	if (has_rail)
 	{
 		L->flags |= MLF_LowerUnpeg;
 	}
-	else if ( (back->f_h > front->f_h && B2->props.getInt("mover")) ||
-			 (front->f_h >  back->f_h && B1->props.getInt("mover")))
+	else if ((/*  back->f_h > front->f_h && */ B2->props.getInt("mover")) ||
+			 (/* front->f_h >  back->f_h && */ B1->props.getInt("mover")))
 	{
 		// pegged lower
 	}
@@ -1623,8 +1544,8 @@ static void DM_DeterminePegging(doom_linedef_c *L,
 		L->flags |= MLF_LowerUnpeg;
 	}
 
-	if ( (back->c_h < front->c_h && T2->props.getInt("mover")) ||
-		(front->c_h <  back->c_h && T1->props.getInt("mover")))
+	if ((/*  back->c_h < front->c_h && */ T2->props.getInt("mover")) ||
+		(/* front->c_h <  back->c_h && */ T1->props.getInt("mover")))
 	{
 		// pegged upper
 	}
@@ -1669,8 +1590,8 @@ static void DM_MakeLine(region_c *R, snag_c *S)
 		back = dm_sectors[N->index];
 
 
-	int rail_side = 0;
-	brush_vert_c *rail = DM_FindRail(S, R, N, &rail_side);
+	brush_vert_c *f_rail = DM_FindRail(S->partner, R, N);
+	brush_vert_c *b_rail = DM_FindRail(S, N, R);
 
 	csg_property_set_c *trig = DM_FindTrigger(S, front, back);
 	csg_property_set_c *spec = DM_FindSpecial(S, R, N);
@@ -1698,16 +1619,16 @@ static void DM_MakeLine(region_c *R, snag_c *S)
 
 
 	// skip the line if same on both sides, except when it has a rail or special
-	if (front == back && !rail && !L_special)
+	if (front == back && !f_rail && !b_rail && !L_special)
 		return;
 
 
 	// update map's bounding box
-	if (x1 < map_bound_x1) map_bound_x1 = x1;
-	if (x2 < map_bound_x1) map_bound_x1 = x2;
+	map_bound_x1 = MIN(map_bound_x1, MIN(x1, x2));
+	map_bound_y1 = MIN(map_bound_y1, MIN(y1, y2));
 
-	if (y1 < map_bound_y1) map_bound_y1 = y1;
-	if (y2 < map_bound_y1) map_bound_y1 = y2;
+	map_bound_x2 = MAX(map_bound_x2, MAX(x1, x2));
+	map_bound_y2 = MAX(map_bound_y2, MAX(y1, y2));
 
 
 	// create the line...
@@ -1730,14 +1651,14 @@ static void DM_MakeLine(region_c *R, snag_c *S)
 
 	// set pegging _before_ making sidedefs
 
-	DM_DeterminePegging(L, front, back, rail ? true : false);
+	DM_DeterminePegging(L, R, N, (f_rail || b_rail) ? true : false);
 
 	bool unpeg_L = (L->flags & MLF_LowerUnpeg) != 0;
 	bool unpeg_U = (L->flags & MLF_UpperUnpeg) != 0;
 
 
-	L->front = DM_MakeSidedef(L, front, back, S->partner, S, rail,   rail_side, unpeg_L, unpeg_U);
-	L->back  = DM_MakeSidedef(L, back, front, S, S->partner, rail, 1-rail_side, unpeg_L, unpeg_U);
+	L->front = DM_MakeSidedef(L, front, back, S->partner, S, f_rail, unpeg_L, unpeg_U);
+	L->back  = DM_MakeSidedef(L, back, front, S, S->partner, b_rail, unpeg_L, unpeg_U);
 
 	SYS_ASSERT(L->front || L->back);
 
@@ -1769,8 +1690,9 @@ static void DM_MakeLine(region_c *R, snag_c *S)
 		L->flags |= MLF_TwoSided;
 	}
 
-	if (rail) L->flags |= rail->face.getInt("flags");
-	if (spec) L->flags |= spec->getInt("flags");
+	if (f_rail) L->flags |= f_rail->face.getInt("flags");
+	if (b_rail) L->flags |= b_rail->face.getInt("flags");
+	if (spec)   L->flags |= spec->getInt("flags");
 
 	if (L->special == LIN_FAKE_UNPEGGED)
 	{
@@ -1787,8 +1709,10 @@ static void DM_MakeLine(region_c *R, snag_c *S)
 
 static void DM_CreateLinedefs()
 {
-	map_bound_x1 = 9999;
-	map_bound_y1 = 9999;
+	map_bound_x1 = +99999;
+	map_bound_y1 = +99999;
+	map_bound_x2 = -99999;
+	map_bound_y2 = -99999;
 
 	for (unsigned int i = 0 ; i < all_regions.size() ; i++)
 	{
@@ -1803,8 +1727,9 @@ static void DM_CreateLinedefs()
 		}
 	}
 
-	map_bound_x1 -= (map_bound_x1 & 31) + 32;
-	map_bound_y1 -= (map_bound_y1 & 31) + 128;
+	// coordinate for first dummy sector
+	dummy_pos_x = map_bound_x1 - (map_bound_x1 & 31);
+	dummy_pos_y = map_bound_y1 - (map_bound_y1 & 31) - 128;
 }
 
 
@@ -1900,7 +1825,7 @@ static void DM_AlignTextures()
 	// the first pass checks every 256 lines for IVAL_NONE (which will then
 	// propagate to similar neighbors), the next pass checks 128, 64, etc..
 
-	for (int pass = 8 ; pass >= 0 ; pass--)
+	for (int pass = 12 ; pass >= 0 ; pass--)
 	{
 		int naturals = 0;
 		int prev_count = 0;
@@ -1909,11 +1834,15 @@ static void DM_AlignTextures()
 		for (i = 0 ; i < (int)dm_linedefs.size() ; i++)
 		{
 			doom_linedef_c *L = dm_linedefs[i];
+
 			if (! L->isValid())
 				continue;
 
 			if (L->front->x_offset == IVAL_NONE)
 			{
+				if (pass >= 12)
+					continue;
+
 				int mask = (1 << pass) - 1;
 
 				if ((i & mask) == 0)
@@ -1921,7 +1850,6 @@ static void DM_AlignTextures()
 					L->front->x_offset = NaturalXOffset(L, 0);
 					naturals++;
 				}
-				continue;
 			}
 
 			doom_linedef_c *P = L;
@@ -1951,8 +1879,6 @@ static void DM_AlignTextures()
 	LogPrintf("Aligned %d textures\n", count);
 }
 
-
-#if 0  // THIS CORNER ROUNDING LOGIC IS NOT USED
 
 static bool RoundWouldClobber(int cx, int cy, int ox, int oy,
                               const doom_vertex_c *ignore1,
@@ -2023,6 +1949,10 @@ static int TryRoundAtVertex(doom_vertex_c *V)
 	// must be two-sided lines, sectors only differ by light level
 	if (! (LX->front && LX->back)) return 0;
 	if (! (LY->front && LY->back)) return 0;
+
+	// must be in a cave
+	if (! LX->front->sector->is_cave) return 0;
+	if (! LY->front->sector->is_cave) return 0;
 
 	if (! LX->front->sector->MatchNoLight(LX->back->sector))
 		return 0;
@@ -2214,8 +2144,8 @@ static void DM_RoundCorners()
 	 * the linedefs are axis-aligned, and tries to add a diagonal at
 	 * the corner.
 	 *
-	 * This is mainly to help reduce jaggies produces by the lighting
-	 * algorithm.
+	 * This is mainly to help reduce jaggies produces by the cave
+	 * lighting algorithm, and is only used in caves.
 	 */
 
 	int count = 0;
@@ -2230,8 +2160,6 @@ static void DM_RoundCorners()
 	// need this again, since we often create co-linear diagonals
 	DM_MergeColinearLines(false /* show_count */);
 }
-
-#endif
 
 
 //------------------------------------------------------------------------
@@ -2398,8 +2326,16 @@ public:
 	void Construct(int index)
 	{
 		// determine coordinate of bottom/left corner
-		int x1 = map_bound_x1 + (index % 64) * 32;
-		int y1 = map_bound_y1 - (index / 64) * 32;
+		int x1 = dummy_pos_x;
+		int y1 = dummy_pos_y;
+
+		dummy_pos_x += 32;
+
+		if (dummy_pos_x + 32 >= map_bound_x2)
+		{
+			dummy_pos_x = map_bound_x1 - (map_bound_x1 & 31);
+			dummy_pos_y -= 32;
+		}
 
 		int x2 = x1 + 16;
 		int y2 = y1 + 16;
@@ -2544,9 +2480,16 @@ static void DM_LiquidExtraFloor(doom_sector_c *sec, csg_brush_c *liquid)
 
 static void DM_ExtraFloors(doom_sector_c *S, region_c *R)
 {
-	if (ef_liquid_type && R->liquid)
+	if (ef_liquid_type)
 	{
-		DM_LiquidExtraFloor(S, R->liquid);
+		for (unsigned int g = R->gaps.size() - 1 ; g > 0 ; g--)
+		{
+			if (R->gaps[g]->liquid)
+			{
+				DM_LiquidExtraFloor(S, R->gaps[g]->liquid);
+				break;
+			}
+		}
 	}
 
 	if (ef_solid_type)
@@ -3130,8 +3073,6 @@ void CSG_DOOM_Write()
 
 	CSG_BSP(4.0);
 
-	CSG_MakeMiniMap();
-
 	CSG_Shade();
 
 	DM_CreateSectors();
@@ -3140,7 +3081,7 @@ void CSG_DOOM_Write()
 	DM_CreateLinedefs();
 	DM_MergeColinearLines();
 
-///???	DM_RoundCorners();
+	DM_RoundCorners();
 	DM_AlignTextures();
 
 	DM_ProcessSecrets();

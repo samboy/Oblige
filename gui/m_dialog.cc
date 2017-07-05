@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2014 Andrew Apted
+//  Copyright (C) 2006-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -23,6 +23,7 @@
 #include "hdr_ui.h"
 
 #include "lib_util.h"
+#include "lib_file.h"
 
 #include "main.h"
 
@@ -230,8 +231,12 @@ const char * DLG_OutputFilename(const char *ext)
 
 	chooser.title(_("Select output file"));
 	chooser.type(Fl_Native_File_Chooser::BROWSE_SAVE_FILE);
-	chooser.options(Fl_Native_File_Chooser::SAVEAS_CONFIRM);
+
+	if (overwrite_warning)
+		chooser.options(Fl_Native_File_Chooser::SAVEAS_CONFIRM);
+
 	chooser.filter(kind_buf);
+
 
 	// TODO: chooser.directory(LAST_USED_DIRECTORY)
 
@@ -270,7 +275,7 @@ const char * DLG_OutputFilename(const char *ext)
 	strcpy(filename, chooser.filename());
 #endif
 
-	// add extension is missing
+	// add extension if missing
 	char *pos = (char *)fl_filename_ext(filename);
 	if (! *pos)
 	{
@@ -301,22 +306,354 @@ void DLG_EditSeed(void)
 
 	sprintf(num_buf, "%1.0f", next_rand_seed);
 
-	const char * buf = fl_input(_("Enter New Seed Number:"), num_buf);
+	const char * user_buf = fl_input(_("Enter New Seed Number:"), num_buf);
 
 	// cancelled?
-	if (! buf)
+	if (! user_buf)
 		return;
-	
+
+	// transfer to our own buffer
+	strncpy(num_buf, user_buf, sizeof(num_buf));
+	num_buf[sizeof(num_buf) - 1] = 0;
+
+	// remove spaces
+	int s, d;
+
+	for (s = d = 0 ; num_buf[s] ; s++)
+		if (! isspace(num_buf[s]))
+			num_buf[d++] = num_buf[s];
+
+	num_buf[d] = 0;
+
 	// nothing entered?
-	if (buf[0] == 0)
+	if (num_buf[0] == 0)
 		return;
 
-	next_rand_seed = atof(buf);
+	// skip leading zeros
+	for (s = 0 ; num_buf[s] == '0' && num_buf[s+1] ; s++)
+	{ }
 
+	next_rand_seed = atof(&num_buf[s]);
+
+	// negative values are not valid
 	if (next_rand_seed < 0)
 		next_rand_seed = -next_rand_seed;
 
+	// fractional part is not used
 	next_rand_seed = floor(next_rand_seed);
+}
+
+
+//----------------------------------------------------------------------
+
+
+class UI_LogViewer : public Fl_Double_Window
+{
+private:
+	bool want_quit;
+
+	Fl_Multi_Browser * browser;
+
+	Fl_Button * copy_but;
+
+public:
+	UI_LogViewer(int W, int H, const char *l);
+	virtual ~UI_LogViewer();
+
+	bool WantQuit() const
+	{
+		return want_quit;
+	}
+
+	void Add(const char *line);
+
+	// ensure the very last line is visible
+	void JumpEnd();
+
+	void ReadLogs();
+
+	void WriteLogs(FILE *fp);
+
+private:
+	int CountSelectedLines() const;
+
+	char * GetSelectedText() const;
+
+	static void   quit_callback(Fl_Widget *, void *);
+	static void   save_callback(Fl_Widget *, void *);
+	static void select_callback(Fl_Widget *, void *);
+	static void   copy_callback(Fl_Widget *, void *);
+};
+
+
+UI_LogViewer::UI_LogViewer(int W, int H, const char *l) :
+	Fl_Double_Window(W, H, l),
+	want_quit(false)
+{
+	box(FL_NO_BOX);
+
+	size_range(W * 3 / 4, H * 3 / 4);
+
+	callback(quit_callback, this);
+
+	int ey = h() - kf_h(65);
+
+	browser = new Fl_Multi_Browser(0, 0, w(), ey);
+	browser->textfont(FL_COURIER);
+	browser->textsize(small_font_size);
+	browser->callback(select_callback, this);
+
+	// disable the special '@' formatting
+	// [ should be zero here, but in FLTK 1.3.4 it causes garbage to be
+	//   displayed.  LogReadLines() ensures 0x7f chars are removed. ]
+	browser->format_char(0x7f);
+
+	resizable(browser);
+
+
+	int button_w = kf_w(80);
+	int button_h = kf_h(35);
+
+	int button_y = ey + (kf_h(65) - button_h) / 2;
+
+	{
+		Fl_Group *o = new Fl_Group(0, ey, w(), h() - ey);
+		o->box(FL_FLAT_BOX);
+
+		o->color(FL_DARK3);
+
+		int bx  = w() - button_w - kf_w(25);
+		int bx2 = bx;
+		{
+			Fl_Button * but = new Fl_Button(bx, button_y, button_w, button_h, fl_close);
+			but->labelfont(FL_HELVETICA_BOLD);
+			but->callback(quit_callback, this);
+		}
+
+		bx = kf_w(25);
+		{
+			Fl_Button * but = new Fl_Button(bx, button_y, button_w, button_h, _("Save"));
+			but->callback(save_callback, this);
+		}
+
+		bx += kf_w(140);
+		{
+			copy_but = new Fl_Button(bx, button_y, button_w, button_h, _("Copy"));
+			copy_but->callback(copy_callback, this);
+			copy_but->shortcut(FL_CTRL + 'c');
+			copy_but->deactivate();
+		}
+
+		bx += button_w + 10;
+
+		Fl_Group *resize_box = new Fl_Group(bx + 10, ey + 2, bx2 - bx - 20, h() - ey - 4);
+		resize_box->box(FL_NO_BOX);
+
+		o->resizable(resize_box);
+
+		o->end();
+	}
+
+	end();
+}
+
+
+UI_LogViewer::~UI_LogViewer()
+{ }
+
+
+void UI_LogViewer::JumpEnd()
+{
+	if (browser->size() > 0)
+	{
+		browser->bottomline(browser->size());
+	}
+}
+
+
+int UI_LogViewer::CountSelectedLines() const
+{
+	int count = 0;
+
+	for (int i = 1 ; i <= browser->size() ; i++)
+		if (browser->selected(i))
+			count++;
+
+	return count;
+}
+
+
+char * UI_LogViewer::GetSelectedText() const
+{
+	char *buf = StringDup("");
+
+	for (int i = 1 ; i <= browser->size() ; i++)
+	{
+		if (! browser->selected(i))
+			continue;
+
+		const char *line_text = browser->text(i);
+		if (! line_text)
+			continue;
+
+		// append current line onto previous ones
+
+		int new_len = (int)strlen(buf) + (int)strlen(line_text);
+
+		char *new_buf = StringNew(new_len + 1 /* newline */ );
+
+		strcpy(new_buf, buf);
+		strcat(new_buf, line_text);
+
+		if (new_len > 0 && new_buf[new_len - 1] != '\n')
+		{
+			new_buf[new_len++] = '\n';
+			new_buf[new_len]   = 0;
+		}
+
+		StringFree(buf);
+
+		buf = new_buf;
+	}
+
+	return buf;
+}
+
+
+void UI_LogViewer::Add(const char *line)
+{
+	browser->add(line);
+}
+
+
+static void logviewer_display_func(const char *line, void *priv_data)
+{
+	UI_LogViewer *log_viewer = (UI_LogViewer *)priv_data;
+
+	log_viewer->Add(line);
+}
+
+
+void UI_LogViewer::ReadLogs()
+{
+	LogReadLines(logviewer_display_func, (void *)this);
+}
+
+
+void UI_LogViewer::WriteLogs(FILE *fp)
+{
+	for (int n = 1 ; n <= browser->size() ; n++)
+	{
+		const char *str = browser->text(n);
+
+		if (str)
+			fprintf(fp, "%s\n", str);
+	}
+}
+
+
+void UI_LogViewer::quit_callback(Fl_Widget *w, void *data)
+{
+	UI_LogViewer *that = (UI_LogViewer *)data;
+
+	that->want_quit = true;
+}
+
+
+void UI_LogViewer::select_callback(Fl_Widget *w, void *data)
+{
+	UI_LogViewer *that = (UI_LogViewer *)data;
+
+	// require 2 or more lines to activate Copy button
+	if (that->CountSelectedLines() >= 2)
+		that->copy_but->activate();
+	else
+		that->copy_but->deactivate();
+}
+
+
+void UI_LogViewer::copy_callback(Fl_Widget *w, void *data)
+{
+	UI_LogViewer *that = (UI_LogViewer *)data;
+
+	const char *text = that->GetSelectedText();
+
+	if (text[0])
+	{
+		Fl::copy(text, (int)strlen(text), 1);
+	}
+
+	StringFree(text);
+}
+
+
+void UI_LogViewer::save_callback(Fl_Widget *w, void *data)
+{
+	UI_LogViewer *that = (UI_LogViewer *)data;
+
+	Fl_Native_File_Chooser chooser;
+
+	chooser.title(_("Pick file to save to"));
+	chooser.type(Fl_Native_File_Chooser::BROWSE_SAVE_FILE);
+	chooser.filter("Text files\t*.txt");
+
+	switch (chooser.show())
+	{
+		case -1:
+			DLG_ShowError(_("Unable to save the file:\n\n%s"), chooser.errmsg());
+			return;
+
+		case 1:
+			// cancelled
+			return;
+
+		default:
+			break;  // OK
+	}
+
+
+	// add an extension if missing
+	static char filename[FL_PATH_MAX];
+
+	strcpy(filename, chooser.filename());
+
+	if (! HasExtension(filename))
+		strcat(filename, ".txt");
+
+
+	FILE *fp = fopen(filename, "w");
+
+	if (! fp)
+	{
+		sprintf(filename, "%s", strerror(errno));
+
+		DLG_ShowError(_("Unable to save the file:\n\n%s"), filename);
+		return;
+	}
+
+	that->WriteLogs(fp);
+
+	fclose(fp);
+}
+
+
+void DLG_ViewLogs(void)
+{
+	int log_w = kf_w(560);
+	int log_h = kf_h(380);
+
+	UI_LogViewer *log_viewer = new UI_LogViewer(log_w, log_h, _("OBLIGE Log Viewer"));
+
+	log_viewer->ReadLogs();
+
+	log_viewer->set_modal();
+	log_viewer->show();
+
+	// run the dialog until the user closes it
+	while (! log_viewer->WantQuit())
+		Fl::wait();
+
+	delete log_viewer;
 }
 
 //--- editor settings ---

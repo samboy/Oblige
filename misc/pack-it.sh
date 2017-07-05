@@ -51,11 +51,12 @@ cp -av prefabs $dest/prefabs
 #
 #  Data files
 #
-cp -av data $dest/data
-
-mkdir $dest/addons
+cp -av data     $dest/data
+cp -av addons   $dest/addons
+cp -av language $dest/language
 
 rm -f $dest/data/*.wad
+rm -f $dest/data/*.wd2
 rm -f $dest/data/*.pak
 
 #

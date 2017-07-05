@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2014 Andrew Apted
+//  Copyright (C) 2006-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -34,8 +34,8 @@
 #endif
 
 
-#define BASE_WINDOW_W  732
-#define BASE_WINDOW_H  432
+#define BASE_WINDOW_W  816
+#define BASE_WINDOW_H  512
 
 
 UI_MainWin *main_win;
@@ -44,6 +44,11 @@ int KF = 0;
 
 int  small_font_size;
 int header_font_size;
+
+#define MODULE_GREEN	fl_rgb_color(0,160,0)
+#define MODULE_RED		fl_rgb_color(224,0,0)
+#define XXX_PURPLE		fl_rgb_color(208,0,208)
+
 
 
 static void main_win_close_CB(Fl_Widget *w, void *data)
@@ -58,40 +63,32 @@ static void main_win_close_CB(Fl_Widget *w, void *data)
 UI_MainWin::UI_MainWin(int W, int H, const char *title) :
 	Fl_Double_Window(W, H, title)
 {
-	end(); // cancel begin() in Fl_Group constructor
-
-	// not resizable!
-	size_range(W, H, W, H);
+	// only vertically resizable
+	size_range(W, H, W, 2000);
 
 	callback((Fl_Callback *) main_win_close_CB);
 
 	color(WINDOW_BG, WINDOW_BG);
 
-	int MOD_W   = W * 2 / 5;
-	int TOP_H   = H * 2 / 5;
 
-	int PANEL_W = (W - MOD_W) / 2 - 4;
+	int LEFT_W = kf_w(232);
+	int MOD_W   = (W - LEFT_W) / 2 - 4;
+
+	int TOP_H   = kf_h(228);
 	int BOT_H   = H - TOP_H - 4;
 
-	game_box = new UI_Game(0, 0, PANEL_W, TOP_H);
-	add(game_box);
+	game_box = new UI_Game(0, 0, LEFT_W, TOP_H);
 
-	level_box = new UI_Level(PANEL_W+4, 0, PANEL_W, TOP_H);
-	add(level_box);
+	build_box = new UI_Build(0, TOP_H+4, LEFT_W, BOT_H);
 
-	play_box = new UI_Play(PANEL_W+4, TOP_H+4, PANEL_W, BOT_H);
-	add(play_box);
+	right_mods = new UI_CustomMods(W - MOD_W, 0, MOD_W, H, MODULE_RED);
 
-
-	build_box = new UI_Build(0, TOP_H+4, PANEL_W, BOT_H);
-	add(build_box);
+	left_mods = new UI_CustomMods(LEFT_W+4, 0, MOD_W, H, MODULE_GREEN);
 
 
-	mod_box = new UI_CustomMods(W - MOD_W, 0, MOD_W, TOP_H+4 + BOT_H);
-	add(mod_box);
+	end();
 
-
-	resizable(NULL);
+	resizable(right_mods);
 }
 
 
@@ -107,17 +104,24 @@ void UI_MainWin::CalcWindowSize(int *W, int *H)
 	*W = kf_w(BASE_WINDOW_W);
 	*H = kf_h(BASE_WINDOW_H);
 
-	if (KF < 0) *W -= 20;
+	// tweak for "Tiny" setting
+	if (KF < 0)
+	{
+		*W -= 24;
+		*H -= 24;
+	}
+
+//// DEBUG
+//	fprintf(stderr, "\n\nCalcWindowSize --> %d x %d\n", *W, *H);
 }
 
 
 void UI_MainWin::Locked(bool value)
 {
-	game_box ->Locked(value);
-	level_box->Locked(value);
-	play_box ->Locked(value);
-	build_box->Locked(value);
-	mod_box  ->Locked(value);
+	game_box  ->Locked(value);
+	build_box ->Locked(value);
+	left_mods ->Locked(value);
+	right_mods->Locked(value);
 }
 
 

@@ -30,29 +30,6 @@ HEXEN.THEMES =
       k_swamp = 50
       k_steel = 50
     }
-
-    switches =
-    {
-      sw_demon = 50
-      sw_moon  = 40
-    }
-
-  }
-
-
-  any_Stairwell =
-  {
-    env = "stairwell"
-
-    walls =
-    {
-      STEEL08 = 50
-    }
-
-    floors =
-    {
-      F_073 = 30
-    }
   }
 
 

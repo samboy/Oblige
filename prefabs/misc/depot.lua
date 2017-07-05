@@ -6,12 +6,12 @@ PREFABS.Depot_raise =
 {
   file  = "misc/depot.wad"
   map   = "MAP01"
+
+  prob  = 50
   where = "seeds"
 
   seed_w = 3
   seed_h = 6
-
-  is_trap = true
 
   tag_9 = "?trap_tag"
 

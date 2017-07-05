@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C)      2010 Andrew Apted
+//  Copyright (C) 2010-2017 Andrew Apted
 //  Copyright (C) 2005-2006 Peter Brett
 //  Copyright (C) 1994-2001 iD Software
 //
@@ -66,6 +66,25 @@ tnode_t;
 static tnode_t *trace_nodes;
 
 
+static int ConvertTraceLeaf(quake_leaf_c *leaf)
+{
+	if (leaf->medium != MEDIUM_SOLID)
+		return TRACE_EMPTY;
+
+	// look for sky ceiling, require all brushes to be "sky"
+	if (leaf->brushes.size() > 0)
+	{
+		for (unsigned int k = 0 ; k < leaf->brushes.size() ; k++)
+			if (! (leaf->brushes[k]->bflags & BFLAG_Sky))
+				return TRACE_SOLID;
+
+		return TRACE_SKY;
+	}
+
+	return TRACE_SOLID;
+}
+
+
 static int ConvertTraceNode(quake_node_c *node, int & index_var)
 {
 	int this_idx = index_var;
@@ -95,8 +114,8 @@ static int ConvertTraceNode(quake_node_c *node, int & index_var)
 
 	// ensure tnode planes are positive
 	if ( (-nx >= MAX(fy, fz)) ||
-			(-ny >= MAX(fx, fz)) ||
-			(-nz >= MAX(fx, fy)) )
+		 (-ny >= MAX(fx, fz)) ||
+		 (-nz >= MAX(fx, fy)) )
 	{
 		side = 1;
 
@@ -105,17 +124,6 @@ static int ConvertTraceNode(quake_node_c *node, int & index_var)
 		TN->normal[2] = -nz;
 
 		TN->dist = -TN->dist;
-	}
-
-
-	// FIXME: face should store flags (like FACE_F_SKY)
-	bool is_sky = false;
-
-	if (fabs(node->plane.nz) > 0.5 &&
-			node->faces.size() == 1 &&
-			strstr(node->faces[0]->texture.c_str(), "sky") != NULL)
-	{
-		is_sky = true;
 	}
 
 
@@ -132,23 +140,21 @@ static int ConvertTraceNode(quake_node_c *node, int & index_var)
 	if (node->front_N)
 		TN->children[side] = ConvertTraceNode(node->front_N, index_var);
 	else
-		TN->children[side] = (node->front_L->medium == MEDIUM_SOLID) ?
-			(is_sky ? TRACE_SKY : TRACE_SOLID) : TRACE_EMPTY;
+		TN->children[side] = ConvertTraceLeaf(node->front_L);
 
 	side ^= 1;
 
 	if (node->back_N)
 		TN->children[side] = ConvertTraceNode(node->back_N, index_var);
 	else
-		TN->children[side] = (node->back_L->medium == MEDIUM_SOLID) ?
-			(is_sky ? TRACE_SKY : TRACE_SOLID) : TRACE_EMPTY;
+		TN->children[side] = ConvertTraceLeaf(node->back_L);
 
 
 	return this_idx;
 }
 
 
-void QCOM_MakeTraceNodes()
+void QVIS_MakeTraceNodes()
 {
 	int total = qk_bsp_root->CountNodes();
 
@@ -160,7 +166,7 @@ void QCOM_MakeTraceNodes()
 }
 
 
-void QCOM_FreeTraceNodes()
+void QVIS_FreeTraceNodes()
 {
 	if (trace_nodes)
 	{
@@ -251,12 +257,164 @@ static int RecursiveTestRay(int nodenum,
 }
 
 
-bool QCOM_TraceRay(float x1, float y1, float z1,
+static int RecursiveTestDetail(quake_node_c *N,
+							   quake_leaf_c *L,
+							   float x1, float y1, float z1,
+							   float x2, float y2, float z2)
+{
+	for (;;)
+	{
+		// hit a leaf?
+		if (L)
+		{
+			for (unsigned int k = 0 ; k < L->faces.size() ; k++)
+			{
+				quake_face_c *F = L->faces[k];
+
+				if (! (F->flags & FACE_F_Detail))
+					continue;
+
+				if (F->flags & FACE_F_NoShadow)
+					continue;
+
+				if (F->IntersectRay(x1,y1,z1, x2,y2,z2))
+					return TRACE_SOLID;
+			}
+
+			return TRACE_EMPTY;
+		}
+
+		float dist1 = N->plane.PointDist(x1, y1, z1);
+		float dist2 = N->plane.PointDist(x2, y2, z2);
+
+		if (dist1 >= -T_EPSILON && dist2 >= -T_EPSILON)
+		{
+			L = N->front_L;
+			N = N->front_N;
+			continue;
+		}
+
+		if (dist1 < T_EPSILON && dist2 < T_EPSILON)
+		{
+			L = N->back_L;
+			N = N->back_N;
+			continue;
+		}
+
+		// the ray crosses the node plane.
+
+		int side = (dist1 < 0) ? 1 : 0;
+
+		double frac = dist1 / (double)(dist1 - dist2);
+
+		float mx = x1 + (x2 - x1) * frac;
+		float my = y1 + (y2 - y1) * frac;
+		float mz = z1 + (z2 - z1) * frac;
+
+		// check if front half of the ray is OK
+
+		quake_leaf_c *L0 = side ? N->back_L : N->front_L;
+		quake_node_c *N0 = side ? N->back_N : N->front_N;
+
+		int r = RecursiveTestDetail(N0, L0, x1,y1,z1, mx,my,mz);
+
+		if (r != TRACE_EMPTY)
+			return r;
+
+		// yes it was, so continue with the back half
+
+		L = side ? N->front_L : N->back_L;
+		N = side ? N->front_N : N->back_N;
+
+		x1 = mx;  y1 = my;  z1 = mz;
+	}
+}
+
+
+bool QVIS_TraceRay(float x1, float y1, float z1,
                    float x2, float y2, float z2)
 {
 	int r = RecursiveTestRay(0, x1,y1,z1, x2,y2,z2);
 
-	return (r != TRACE_SOLID);
+	if (r == TRACE_SOLID)
+		return false;
+
+	// check for detail faces *after* the main trace
+
+	r = RecursiveTestDetail(qk_bsp_root, NULL, x1,y1,z1, x2,y2,z2);
+
+	if (r == TRACE_SOLID)
+		return false;
+
+	return true;
+}
+
+
+static int RecursiveTestPoint(int nodenum, float x, float y, float z)
+{
+	for (;;)
+	{
+		if (nodenum < 0)
+			return nodenum;
+
+		tnode_t *TN = &trace_nodes[nodenum];
+
+		float dist;
+
+		switch (TN->type)
+		{
+			case PLANE_X:
+				dist = x;
+				break;
+
+			case PLANE_Y:
+				dist = y;
+				break;
+
+			case PLANE_Z:
+				dist = z;
+				break;
+
+			default:
+				dist = x * TN->normal[0] + y * TN->normal[1] + z * TN->normal[2];
+				break;
+		}
+
+		dist -= TN->dist;
+
+		if (dist > 0.0001)
+		{
+			nodenum = TN->children[0];
+			continue;
+		}
+
+		if (dist < -0.0001)
+		{
+			nodenum = TN->children[1];
+			continue;
+		}
+
+		// point is sitting ON the node, we must test both sides
+		// [ in order to produce a consistent result ]
+
+		int A = RecursiveTestPoint(TN->children[0], x,y,z);
+		int B = RecursiveTestPoint(TN->children[1], x,y,z);
+
+		// we treat sky brushes as solid here
+
+		if (A == TRACE_EMPTY && B == TRACE_EMPTY)
+			return TRACE_EMPTY;
+
+		return TRACE_SOLID;
+	}
+}
+
+
+bool QVIS_TracePoint(float x, float y, float z)
+{
+	int r = RecursiveTestPoint(0, x,y,z);
+
+	return (r == TRACE_EMPTY);
 }
 
 
@@ -313,7 +471,7 @@ void qCluster_c::MarkAmbient(int kind)
 }
 
 
-void QCOM_CreateClusters(double min_x, double min_y, double max_x, double max_y)
+void QVIS_CreateClusters(double min_x, double min_y, double max_x, double max_y)
 {
 	SYS_ASSERT(min_x < max_x);
 	SYS_ASSERT(min_y < max_y);
@@ -348,7 +506,7 @@ void QCOM_CreateClusters(double min_x, double min_y, double max_x, double max_y)
 }
 
 
-void QCOM_FreeClusters()
+void QVIS_FreeClusters()
 {
 	if (qk_clusters)
 	{
@@ -364,7 +522,7 @@ void QCOM_FreeClusters()
 }
 
 
-void QCOM_VisMarkWall(int cx, int cy, int side)
+void QVIS_MarkWall(int cx, int cy, int side)
 {
 	SYS_ASSERT(qk_visbuf);
 
@@ -392,7 +550,7 @@ static void MarkSolidClusters()
 		if (cluster->leafs.empty())
 		{
 			for (int side = 2 ; side <= 8 ; side += 2)
-				QCOM_VisMarkWall(cx, cy, side);
+				QVIS_MarkWall(cx, cy, side);
 		}
 	}
 }
@@ -552,6 +710,14 @@ static int WriteCompressedRow(bool PHS)
 }
 
 
+static void WriteUncompressedRow()
+{
+	int length = v_bytes_per_row;
+
+	q_visibility->Append(v_row_buffer, length);
+}
+
+
 static void CollectRowData(int src_x, int src_y, bool PHS)
 {
 	// initial state : everything visible
@@ -567,7 +733,7 @@ static void CollectRowData(int src_x, int src_y, bool PHS)
 
 		qCluster_c *cluster = qk_clusters[cy * cluster_W + cx];
 
-		if (qk_game == 2)  // Quake II
+		if (qk_game >= 2)  // Quake II and III
 		{
 			int index = cy * cluster_W + cx;
 
@@ -636,14 +802,30 @@ static void Build_PVS()
 		qCluster_c *cluster = qk_clusters[cy * cluster_W + cx];
 
 		if (cluster->leafs.empty())
+		{
+			if (qk_game == 3)
+			{
+				memset(v_row_buffer, 0, v_bytes_per_row);
+				WriteUncompressedRow();
+			}
+
 			continue;
+		}
 
 		qk_visbuf->ClearVis();
 		qk_visbuf->ProcessVis(cx, cy);
 
 		CollectRowData(cx, cy, false);
 
-		cluster->visofs = WriteCompressedRow(false);
+		if (qk_game == 3)
+		{
+			WriteUncompressedRow();
+			cluster->visofs = 1;  // dummy value, unused
+		}
+		else
+		{
+			cluster->visofs = WriteCompressedRow(false);
+		}
 
 		if (qk_game == 2)
 		{
@@ -707,8 +889,11 @@ static void ShowVisStats()
 	pvs_stats.Finish();
 	phs_stats.Finish();
 
-	LogPrintf("pvs compression ratio %1.0f%% (%d bytes --> %d)\n",
-			pvs_stats.CalcRatio(), pvs_stats.uncompressed, pvs_stats.compressed);
+	if (qk_game < 3)
+	{
+		LogPrintf("pvs compression ratio %1.0f%% (%d bytes --> %d)\n",
+				pvs_stats.CalcRatio(), pvs_stats.uncompressed, pvs_stats.compressed);
+	}
 
 	if (qk_game == 2)
 	{
@@ -724,7 +909,7 @@ static void ShowVisStats()
 }
 
 
-void QCOM_Visibility(int lump, int max_size, int numleafs)
+void QVIS_Visibility(int lump, int max_size, int numleafs)
 {
 	LogPrintf("\nVisibility...\n");
 
@@ -741,7 +926,7 @@ void QCOM_Visibility(int lump, int max_size, int numleafs)
 	FloodAmbientSounds();
 
 
-	if (qk_game == 2)
+	if (qk_game >= 2)
 		v_row_bits = num_clusters;
 	else
 		v_row_bits = numleafs;
@@ -757,6 +942,18 @@ void QCOM_Visibility(int lump, int max_size, int numleafs)
 
 
 	q_visibility = BSP_NewLump(lump);
+
+	if (qk_game == 3)
+	{
+		s32_t raw_count;
+		s32_t raw_size;
+
+		raw_count = LE_S32(num_clusters);
+		raw_size  = LE_S32(v_bytes_per_row);
+
+		q_visibility->Append(&raw_count, sizeof(raw_count));
+		q_visibility->Append(&raw_size,  sizeof(raw_size));
+	}
 
 	Build_PVS();
 

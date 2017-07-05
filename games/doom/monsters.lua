@@ -2,7 +2,7 @@
 --  DOOM MONSTERS
 --------------------------------------------------------------------
 --
---  Copyright (C) 2006-2016 Andrew Apted
+--  Copyright (C) 2006-2017 Andrew Apted
 --  Copyright (C)      2011 Chris Pisarczyk
 --
 --  This program is free software; you can redistribute it and/or
@@ -15,21 +15,26 @@
 -- Usable keywords
 -- ===============
 --
+-- id         : editor number used to place monster on the map
+-- level      : how far along (over episode) it should appear (1..9)
+--
 -- prob       : general probability of being used
 -- crazy_prob : probability for "Crazy" setting (default is 50)
 --
 -- health : hit points of monster
--- damage : total damage inflicted on player (average * accuracy)
+-- damage : total damage inflicted on player (on average)
 -- attack : kind of attack (hitscan | missile | melee)
 -- density : how many too use (e.g. 0.5 = half the normal amount)
 --
 -- float  : true if monster floats (flies)
 -- invis  : true if invisible (or partially)
 --
--- min_weapon : level of weapon required for monster to appear
+-- weap_needed : weapons player must have to fight this monster
+-- weap_min_damage : damage (per second) of player weapon required
 -- weap_prefs : weapon preferences table (usage by player)
 -- disloyal   : can hurt a member of same species
 -- infight_damage : damage inflicted on one (or more) other monsters
+--
 --
 -- NOTES
 -- =====
@@ -62,7 +67,7 @@ DOOM.MONSTERS =
     density = 1.5
     room_size = "small"
     disloyal = true
-    trap_factor = 0.1
+    trap_factor = 0.01
     infight_damage = 1.9
   }
 
@@ -78,6 +83,7 @@ DOOM.MONSTERS =
     attack = "hitscan"
     density = 1.0
     give = { {weapon="shotty"}, {ammo="shell",count=4} }
+    weap_needed = { shotty=true }
     species = "zombie"
     room_size = "small"
     disloyal = true
@@ -97,6 +103,7 @@ DOOM.MONSTERS =
     attack = "missile"
     density = 1.0
     room_size = "small"
+    trap_factor = 0.3
     infight_damage = 4.0
   }
 
@@ -115,7 +122,7 @@ DOOM.MONSTERS =
     weap_prefs = { launch=0.3 }
     room_size = "small"
     disloyal = true
-    trap_factor = 0.1
+    trap_factor = 0.2
     infight_damage = 2.1
   }
 
@@ -130,7 +137,7 @@ DOOM.MONSTERS =
     damage = 0.4
     attack = "melee"
     density = 0.85
-    min_weapon = 1
+    weap_min_damage = 40
     weap_prefs = { launch=0.3 }
     room_size = "any"
     infight_damage = 3.5
@@ -151,7 +158,7 @@ DOOM.MONSTERS =
     density = 0.5
     invis = true
     outdoor_factor = 3.0
-    min_weapon = 1
+    weap_min_damage = 40
     weap_prefs = { launch=0.1 }
     species = "demon"
     room_size = "any"
@@ -170,7 +177,7 @@ DOOM.MONSTERS =
     damage = 4.0
     attack = "missile"
     density = 0.6
-    min_weapon = 1
+    weap_min_damage = 40
     float = true
     room_size = "large"
     trap_factor = 0.5
@@ -194,7 +201,7 @@ DOOM.MONSTERS =
     damage = 7.5
     attack = "missile"
     density = 0.3
-    min_weapon = 3
+    weap_min_damage = 88
     room_size = "medium"
     infight_damage = 40
   }
@@ -213,7 +220,7 @@ DOOM.MONSTERS =
     damage = 125
     attack = "missile"
     density = 0.1
-    min_weapon = 4
+    weap_min_damage = 150
     weap_prefs = { bfg=10.0 }
     room_size = "medium"
     infight_damage = 1600
@@ -234,7 +241,7 @@ DOOM.MONSTERS =
     damage = 100
     attack = "hitscan"
     density = 0.1
-    min_weapon = 5
+    weap_min_damage = 200
     weap_prefs = { bfg=10.0 }
     room_size = "large"
     infight_damage = 700
@@ -255,7 +262,8 @@ DOOM.MONSTERS =
     damage = 5.5
     attack = "hitscan"
     give = { {weapon="chain"}, {ammo="bullet",count=10} }
-    min_weapon = 1
+    weap_needed = { chain=true }
+    weap_min_damage = 50
     density = 0.75
     species = "zombie"
     room_size = "large"
@@ -274,10 +282,10 @@ DOOM.MONSTERS =
     health = 300
     damage = 8.5
     attack = "missile"
-    min_weapon = 1
+    weap_min_damage = 60
     density = 0.6
     room_size = "any"
-    trap_factor = 4.0
+    trap_factor = 3.6
     infight_damage = 20
   }
 
@@ -291,7 +299,7 @@ DOOM.MONSTERS =
     health = 500
     damage = 4.0
     attack = "missile"
-    min_weapon = 1
+    weap_min_damage = 50
     density = 0.75
     species = "baron"
     room_size = "medium"
@@ -308,8 +316,8 @@ DOOM.MONSTERS =
     health = 600
     damage = 8.0
     attack = "missile"
-    density = 0.35
-    min_weapon = 3
+    density = 0.32
+    weap_min_damage = 88
     room_size = "large"
     infight_damage = 70
   }
@@ -324,7 +332,7 @@ DOOM.MONSTERS =
     health = 500
     damage = 10.7
     attack = "missile"
-    min_weapon = 1
+    weap_min_damage = 60
     density = 0.5
     room_size = "medium"
     infight_damage = 62
@@ -346,7 +354,7 @@ DOOM.MONSTERS =
     attack = "hitscan"
     density = 0.15
     room_size = "medium"
-    min_weapon = 4
+    weap_min_damage = 120
     nasty = true
     infight_damage = 18
   }
@@ -366,7 +374,7 @@ DOOM.MONSTERS =
     attack = "missile"
     density = 0.1
     float = true
-    min_weapon = 3
+    weap_min_damage = 100
     weap_prefs = { launch=0.1 }
     room_size = "large"
     cage_factor = 0  -- never put in cages

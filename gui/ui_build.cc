@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2016 Andrew Apted
+//  Copyright (C) 2006-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -26,12 +26,10 @@
 #include "main.h"
 
 
-#define INACTIVE_BG  fl_gray_ramp(5)
-#define INACTIVE_BG2  fl_gray_ramp(14)
-
 #define ABORT_COLOR  fl_color_cube(3,1,1)
 
 #define PROGRESS_FG  fl_color_cube(3,3,0)
+#define PROGRESS_BG  fl_gray_ramp(10)
 
 #define NODE_PROGRESS_FG  fl_color_cube(1,4,2)
 
@@ -39,35 +37,27 @@
 UI_Build::UI_Build(int X, int Y, int W, int H, const char *label) :
 	Fl_Group(X, Y, W, H, label)
 {
-	end(); // cancel begin() in Fl_Group constructor
-
 	box(FL_THIN_UP_BOX);
-
-	if (! alternate_look)
-		color(BUILD_BG, BUILD_BG);
 
 	resizable(NULL);
 
 	status_label[0] = 0;
 
 
-	int cy = Y + kf_h(18);
-
-
 	int button_w = W * 0.35;
 	int button_h = kf_h(30);
-	int button_x = X + kf_w(12);
+	int button_x = X + kf_w(16);
 
 
-	int mini_w = W * 0.45;
+	int mini_w = W * 0.42;
 	int mini_h = mini_w;
-	int mini_x = button_x + button_w + kf_w(12);
+	int mini_x = button_x + button_w + kf_w(24);
+	int mini_y = Y + kf_h(28);
 
-	mini_map = new UI_MiniMap(mini_x, cy + kf_h(14), mini_w, mini_h);
-
-	add(mini_map);
+	mini_map = new UI_MiniMap(mini_x, mini_y, mini_w, mini_h);
 
 
+	int cy = mini_y - button_h/2;
 
 	misc_menu = new Fl_Menu_Across(button_x, cy, button_w, button_h,
 		StringPrintf("     %s @-3>", _("Menu")));
@@ -77,12 +67,11 @@ UI_Build::UI_Build(int X, int Y, int W, int H, const char *label) :
 	misc_menu->add(_("Options"),       FL_F+4, menu_do_options);
 	misc_menu->add(_("Addon List"),    FL_F+3, menu_do_addons);
 	misc_menu->add(_("Set Seed"),      FL_F+5, menu_do_edit_seed);
-	misc_menu->add(_("Manage Config"), FL_F+9, menu_do_manage_config);
+	misc_menu->add(_("View Logs"),     FL_F+6, menu_do_view_logs);
+	misc_menu->add(_("Config Manager"),FL_F+9, menu_do_manage_config);
 
-	add(misc_menu);
 
-
-	cy += misc_menu->h() + kf_h(17);
+	cy = mini_y + mini_h / 2 - (button_h+4) / 2;
 
 
 	build = new Fl_Button(button_x, cy, button_w, button_h + 4, _("Build"));
@@ -91,21 +80,17 @@ UI_Build::UI_Build(int X, int Y, int W, int H, const char *label) :
 	build->callback(build_callback, this);
 	build->shortcut(FL_F+2);
 
-	add(build);
 
-	cy += build->h() + kf_h(17);
-
+	cy = mini_y + mini_h - button_h/2;
 
 	quit = new Fl_Button(button_x, cy, button_w, button_h, _("Quit"));
 	quit->callback(quit_callback, this);
 	quit->shortcut(FL_COMMAND + 'q');
 
-	add(quit);
-
 
 	/* --- Status Area --- */
 
-	cy = Y + H - kf_h(90);
+	cy = cy + button_h + kf_h(16);
 
 
 	int pad = kf_w(14);
@@ -113,22 +98,29 @@ UI_Build::UI_Build(int X, int Y, int W, int H, const char *label) :
 	status = new Fl_Box(FL_FLAT_BOX, X + pad, cy, W - pad*2, kf_h(26), _("Ready to go!"));
 	status->align(FL_ALIGN_INSIDE | FL_ALIGN_BOTTOM_LEFT);
 
-	if (! alternate_look)
-		status->color(FL_DARK2 - 2, FL_DARK2 - 2);
-
-	add(status);
-
-	cy += status->h() + kf_h(14);
+	cy += status->h() + kf_h(12);
 
 
 	progress = new Fl_Progress(X + pad, cy, W - pad*2, kf_h(26));
 	progress->align(FL_ALIGN_INSIDE);
 	progress->box(FL_FLAT_BOX);
-	progress->color(alternate_look ? INACTIVE_BG2 : INACTIVE_BG, FL_BLACK);
+	progress->color(PROGRESS_BG, PROGRESS_BG);
 	progress->value(0.0);
 	progress->labelsize(FL_NORMAL_SIZE + 2);
 
-	add(progress);
+	cy = cy + progress->h() + kf_h(8);
+
+
+	int cw = kf_w(10);
+	int ch = kf_h(26);
+
+	seed_display = new Fl_Box(FL_NO_BOX, X + cw, cy, W - cw*2, ch, "---- ---- ---- ----");
+	seed_display->labelfont(FL_COURIER);
+	seed_display->labelsize(FL_NORMAL_SIZE + 2);
+	seed_display->labelcolor(34);
+
+
+	end();
 }
 
 
@@ -168,16 +160,14 @@ void UI_Build::Prog_Init(int node_perc, const char *extra_steps)
 	progress->maximum(1.0);
 
 	progress->value(0.0);
-	progress->color(alternate_look ? FL_BLACK : FL_BACKGROUND_COLOR, PROGRESS_FG);
-
-	if (alternate_look)
-		progress->labelcolor(FL_WHITE);
+	progress->color(FL_DARK3, PROGRESS_FG);
+	progress->labelcolor(FL_WHITE);
 }
 
 
 void UI_Build::Prog_Finish()
 {
-	progress->color(alternate_look ? INACTIVE_BG2 : INACTIVE_BG, FL_BLACK);
+	progress->color(PROGRESS_BG, PROGRESS_BG);
 	progress->value(0.0);
 	progress->label("");
 }
@@ -342,6 +332,39 @@ void UI_Build::AddStatusStep(const char *name)
 }
 
 
+void UI_Build::DisplaySeed(double value)
+{
+	if (value < 0)
+	{
+		seed_display->label("---- ---- ---- ----");
+		return;
+	}
+
+	// format the number to be 4 groups of 4 digits.
+	// if the seed is longer than 16 digits, then we truncate it.
+
+	char buffer[256];
+
+	sprintf(buffer, "%016.0f", value);
+
+	char newbuf[64];
+	memset(newbuf, 0, sizeof(newbuf));
+
+	int i, k;
+
+	for (i = 0 ; i < 4 ; i++)
+	{
+		for (k = 0 ; k < 4 ; k++)
+			newbuf[i*5 + k] = buffer[i*4 + k];
+
+		if (i < 3)
+			newbuf[(i+1) * 5 - 1] = ' ';
+	}
+
+	seed_display->copy_label(newbuf);
+}
+
+
 //----------------------------------------------------------------
 
 void UI_Build::build_callback(Fl_Widget *w, void *data)
@@ -384,6 +407,11 @@ void UI_Build::menu_do_addons(Fl_Widget *w, void *data)
 void UI_Build::menu_do_edit_seed(Fl_Widget *w, void *data)
 {
 	DLG_EditSeed();
+}
+
+void UI_Build::menu_do_view_logs(Fl_Widget *w, void *data)
+{
+	DLG_ViewLogs();
 }
 
 void UI_Build::menu_do_manage_config(Fl_Widget *w, void *data)

@@ -21,42 +21,28 @@ DOOM.ENTITIES =
   player3 = { id=3, r=16, h=56 }
   player4 = { id=4, r=16, h=56 }
 
-  -- these are not standard, but most source ports will handle them or
-  -- ignore them with a warning.
-  player5 = { id=4001, r=16, h=56 }
-  player6 = { id=4002, r=16, h=56 }
-  player7 = { id=4003, r=16, h=56 }
-  player8 = { id=4004, r=16, h=56 }
-
   dm_player     = { id=11 }
   teleport_spot = { id=14 }
 
   --- KEYS ---
 
-  kc_red     = { id=13 }
-  kc_yellow  = { id=6  }
-  kc_blue    = { id=5  }
+  k_red      = { id=13 }
+  k_yellow   = { id=6  }
+  k_blue     = { id=5  }
 
   ks_red     = { id=38 }
   ks_yellow  = { id=39 }
   ks_blue    = { id=40 }
 
-  --- POWERUPS (with special requirements) ---
-
-  backpack = { id=8 }   -- FIXME: REMOVE
-
-  suit = { id=2025 }
-
-  goggles = { id=2045 }
-
-
   --- SCENERY ---
 
   -- lights --
-  lamp         = { id=2028,r=16, h=48, light=255 }
-  mercury_lamp = { id=85,  r=16, h=80, light=255 }
-  short_lamp   = { id=86,  r=16, h=60, light=255 }
-  tech_column  = { id=48,  r=16, h=128,light=255 }
+  lamp         = { id=2028, r=16, h=48,  light=255 }
+  tech_column  = { id=48,   r=16, h=128, light=255 }
+
+  -- these two lamps are not available in DOOM 1
+  mercury_lamp   = { id=85,  r=16, h=80, light=255 }
+  mercury_small  = { id=86,  r=16, h=60, light=255 }
 
   candle         = { id=34, r=16, h=16, light=111, pass=true }
   candelabra     = { id=35, r=16, h=56, light=255 }
@@ -94,6 +80,7 @@ DOOM.ENTITIES =
   impaled_human  = { id=25,r=20, h=64 }
   impaled_twitch = { id=26,r=16, h=64 }
 
+  -- these "gutted_XXX" things are not available in DOOM 1
   gutted_victim1 = { id=73, r=16, h=88, ceil=true }
   gutted_victim2 = { id=74, r=16, h=88, ceil=true }
   gutted_torso1  = { id=75, r=16, h=64, ceil=true }
@@ -108,6 +95,8 @@ DOOM.ENTITIES =
 
   gibs          = { id=24, r=20, h=16, pass=true }
   gibbed_player = { id=10, r=20, h=16, pass=true }
+
+  -- these three are not available in DOOM 1
   pool_blood_1  = { id=79, r=20, h=16, pass=true }
   pool_blood_2  = { id=80, r=20, h=16, pass=true }
   pool_brains   = { id=81, r=20, h=16, pass=true }
@@ -124,12 +113,6 @@ DOOM.ENTITIES =
 
   -- replacement sprite (normally this is a gore sprite)
   hang_lamp  = { id=60, r=20, h=68, ceil=true, pass=true }
-
-  -- CTF things (NOTE: these don't exist in vanilla DOOM)
-  ctf_blue_flag  = { id=5130, r=16, h=56, pass=true }
-  ctf_blue_start = { id=5080, r=16, h=56, pass=true }
-  ctf_red_flag   = { id=5131, r=16, h=56, pass=true }
-  ctf_red_start  = { id=5081, r=16, h=56, pass=true }
 
   -- special stuff --
   keen  = { id=72, r=16, h=72, ceil=true }

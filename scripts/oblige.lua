@@ -4,7 +4,7 @@
 --
 --  Oblige Level Maker
 --
---  Copyright (C) 2006-2016 Andrew Apted
+--  Copyright (C) 2006-2017 Andrew Apted
 --
 --  This program is free software; you can redistribute it and/or
 --  modify it under the terms of the GNU General Public License
@@ -30,10 +30,11 @@ gui.import("area")
 gui.import("connect")
 gui.import("quest")
 
-gui.import("boss_map")
-gui.import("dm_ctf")
+gui.import("automata")
+gui.import("cave")
 gui.import("layout")
 gui.import("render")
+gui.import("boss_map")
 gui.import("room")
 
 gui.import("fight")
@@ -63,7 +64,7 @@ function ob_traceback(msg)
     end
 
     local base_fn = string.match(info.short_src, "[^/]*$")
- 
+
     return string.format("@ %s:%d", base_fn, info.currentline)
   end
 
@@ -144,110 +145,13 @@ function ob_ref_table(op, t)
 end
 
 
+------------------------------------------------------------------------
 
-function ob_console_dump(info, ...)
 
-  local function dump_tab(t, indent)
-    assert(t)
-
-    indent = indent or 0
-
-    local keys = {}
-    local longest_k = 1
-
-    each k,v in t do
-      table.insert(keys, k)
-      longest_k = math.max(longest_k, string.len(tostring(k)))
-    end
-
-    gui.conprintf("@2%s{\n", string.rep("   ", indent))
-
-    table.sort(keys, function (A,B) return tostring(A) < tostring(B) end)
-
-    local space = string.rep("   ", indent+1)
-
-    each k in keys do
-      local v = t[k]
-
-      local k_type = type(k)
-      local v_type = type(v)
-
-      if not (k_type == "string" or k_type == "number") or k == "___REFS" then
-        gui.conprintf("%s@1%s@7 = %s\n", space, tostring(k), tostring(v))
-
-      elseif v_type == "table" then
-        if table.empty(v) then
-          gui.conprintf("%s%s = @2{ }\n", space, k)
-        else
-          local label = "table"
-          if #v > 0 then label = string.format("list %d", #v) end
-
-          local ref_id = ob_ref_table("store", v)
-
-          gui.printf("%s%s = @b2%s:e:%d:%d@\n", space, k, label, indent+1, ref_id);
-        end
-
-      elseif type(v) == "string" then
-        gui.conprintf("%s%s = @5\"%s\"\n", space, k, tostring(v))
-
-      elseif type(v) == "function" then
-        gui.conprintf("%s@3%s()\n", space, k)
-
-      else
-        gui.conprintf("%s%s = @3%s\n", space, k, tostring(v))
-      end
-    end
-
-    gui.conprintf("@2%s}\n", string.rep("   ",indent))
-  end
-
-  function dump_value(val)
-    local t = type(val)
-
-    if val == nil then
-      gui.conprintf("@1nil\n")
-    elseif t == "table" then
-      if table.empty(val) then
-        gui.conprintf("@2{ }\n")
-      else
-        dump_tab(val)
-      end
-    elseif t == "string" then
-      gui.conprintf("@5\"%s\"\n", tostring(val))
-    else
-      gui.conprintf("@3%s\n", tostring(val))
-    end
-  end
-
-  
-  --| ob_console_dump |--
-
-  if info and info.tab_ref then
-    local t = ob_ref_table("lookup", info.tab_ref)
-    if t then
-      dump_tab(t, info.indent)
-    else
-      gui.conprintf("@1BAD TABLE REF: %s\n", tostring(info.tab_ref))
-    end
-
-    return
-  end
-
-  -- grab results and show them
-  local args = { ... }
-  local count = select("#", ...)
-
-  if count == 0 then
-    gui.conprintf("no results\n")
-  else
-    for index = 1,count do
-      dump_value(args[index])
-    end
-  end
+function ob_check_ui_module(def)
+  return string.match(def.name, "^ui") != nil
 end
 
-
-------------------------------------------------------------------------
 
 
 function ob_match_word_or_table(tab, conf)
@@ -260,56 +164,172 @@ end
 
 
 
+function ob_match_game(T)
+  if not T.game then return true end
+  if T.game == "any" then return true end
+
+  -- special check: if required game is "doomish" then allow any
+  -- of the DOOM games to match.
+  if T.game == "doomish" then
+     T.game = { doom1=1, doom2=1 }
+  end
+
+  local game   = T.game
+  local result = true
+
+  -- negated check?
+  if type(game) == "string" and string.sub(game, 1, 1) == '!' then
+    game   = string.sub(game, 2)
+    result = not result
+  end
+
+  -- normal check
+  if ob_match_word_or_table(game, OB_CONFIG.game) then
+    return result
+  end
+
+  -- handle extended games
+  local game_def = OB_GAMES[OB_CONFIG.game]
+
+  while game_def do
+    if not game_def.extends then
+      break;
+    end
+
+    if ob_match_word_or_table(game, game_def.extends) then
+      return result
+    end
+
+    game_def = OB_GAMES[game_def.extends]
+  end
+
+  return not result
+end
+
+
+function ob_match_engine(T)
+  if not T.engine then return true end
+  if T.engine == "any" then return true end
+
+  local engine = T.engine
+  local result = true
+
+  -- negated check?
+  if type(engine) == "string" and string.sub(engine, 1, 1) == '!' then
+    engine = string.sub(engine, 2)
+    result = not result
+  end
+
+  -- normal check
+  if ob_match_word_or_table(engine, OB_CONFIG.engine) then
+    return result
+  end
+
+  -- handle extended engines
+
+  local engine_def = OB_ENGINES[OB_CONFIG.engine]
+
+  while engine_def do
+    if not engine_def.extends then
+      break;
+    end
+
+    if ob_match_word_or_table(engine, engine_def.extends) then
+      return result
+    end
+
+    engine_def = OB_ENGINES[engine_def.extends]
+  end
+
+  return not result
+end
+
+
+function ob_match_playmode(T)
+  -- TODO : remove this function
+
+  return true
+end
+
+
+function ob_match_level_theme(T)
+  if not T.theme then return true end
+  if T.theme == "any" then return true end
+
+  local theme  = T.theme
+  local result = true
+
+  -- negated check?
+  if type(theme) == "string" and string.sub(theme, 1, 1) == '!' then
+    theme  = string.sub(theme, 2)
+    result = not result
+  end
+
+  -- normal check
+  if ob_match_word_or_table(theme, LEVEL.theme_name) then
+    return result
+  end
+
+  return not result
+end
+
+
+function ob_match_module(T)
+  if not T.module then return true end
+
+  local mod_tab = T.module
+
+  if type(mod_tab) != "table" then
+    mod_tab  = { [T.module]=1 }
+    T.module = mod_tab
+  end
+
+  -- require ALL specified modules to be present and enabled
+
+  each name,_ in mod_tab do
+    local def = OB_MODULES[name]
+
+    if not (def and def.shown and def.enabled) then
+      return false
+    end
+  end
+
+  return true
+end
+
+
+function ob_match_feature(T)
+  if not T.feature then return true end
+
+  local feat_tab = T.feature
+
+  if type(feat_tab) != "table" then
+    feat_tab  = { [T.feature]=1 }
+    T.feature = feat_tab
+  end
+
+  -- require ALL specified features to be available
+
+  each name,_ in feat_tab do
+    local param = PARAM[name]
+
+    if param == nil or param == false then
+      return false
+    end
+  end
+
+  return true
+end
+
+
+
 function ob_match_conf(T)
   assert(OB_CONFIG.game)
-  assert(OB_CONFIG.mode)
   assert(OB_CONFIG.engine)
 
-  if T.game and not ob_match_word_or_table(T.game, OB_CONFIG.game) then
-    local game_def = OB_GAMES[OB_CONFIG.game]
-
-    while game_def do
-      if not game_def.extends then return false end
-
-      if ob_match_word_or_table(T.game, game_def.extends) then
-        break; -- OK --
-      end
-
-      game_def = OB_GAMES[game_def.extends]
-    end
-  end
-
-  if T.engine and not ob_match_word_or_table(T.engine, OB_CONFIG.engine) then
-    local engine_def = OB_ENGINES[OB_CONFIG.engine]
-
-    while engine_def do
-      if not engine_def.extends then return false end
-
-      if ob_match_word_or_table(T.engine, engine_def.extends) then
-        break; -- OK --
-      end
-
-      engine_def = OB_ENGINES[engine_def.extends]
-    end
-  end
-
-  if T.playmode and not ob_match_word_or_table(T.playmode, OB_CONFIG.mode) then
-    return false
-  end
-
-  if T.mod then
-    local mod = T.mod
-    if type(T.mod) != "table" then
-      mod = { [T.mod] = 1 }
-    end
-
-    each name,_ in mod do
-      local def = OB_MODULES[name]
-      if not (def and def.shown and def.enabled) then
-        return false
-      end
-    end
-  end
+  if not ob_match_game(T)     then return false end
+  if not ob_match_engine(T)   then return false end
+  if not ob_match_module(T)   then return false end
 
   return true --OK--
 end
@@ -326,12 +346,12 @@ function ob_update_engines()
       need_new = true
     end
 
-    gui.show_button("engine", name, shown)
+    gui.enable_choice("engine", name, shown)
   end
 
   if need_new then
     OB_CONFIG.engine = "nolimit"
-    gui.change_button("engine", OB_CONFIG.engine)
+    gui.set_button("engine", OB_CONFIG.engine)
   end
 end
 
@@ -348,7 +368,7 @@ function ob_update_themes()
     end
 
     def.shown = shown
-    gui.show_button("theme", name, def.shown)
+    gui.enable_choice("theme", name, def.shown)
   end
 
   -- try to keep the same GUI label
@@ -358,14 +378,14 @@ function ob_update_themes()
 
       if shown and def.label == new_label then
         OB_CONFIG.theme = name
-        gui.change_button("theme", OB_CONFIG.theme)
+        gui.set_button("theme", OB_CONFIG.theme)
         return
       end
     end
 
-    -- otherwise revert to Mix It Up
-    OB_CONFIG.theme = "mixed"
-    gui.change_button("theme", OB_CONFIG.theme)
+    -- otherwise revert to As Original
+    OB_CONFIG.theme = "original"
+    gui.set_button("theme", OB_CONFIG.theme)
   end
 end
 
@@ -375,7 +395,7 @@ function ob_update_modules()
   -- modules may depend on other modules, hence we may need
   -- to repeat this multiple times until all the dependencies
   -- have flowed through.
-  
+
   for loop = 1,100 do
     local changed = false
 
@@ -387,7 +407,7 @@ function ob_update_modules()
       end
 
       def.shown = shown
-      gui.show_button("module", name, def.shown)
+      gui.show_module(name, def.shown)
     end
 
     if not changed then break; end
@@ -402,6 +422,22 @@ function ob_update_all()
   ob_update_themes()
 end
 
+
+
+function ob_find_mod_option(mod, opt_name)
+  if not mod.options then return nil end
+
+  -- if 'options' is a list, search it one-by-one
+  if mod.options[1] then
+    each opt in mod.options do
+      if opt.name == opt_name then
+        return opt
+      end
+    end
+  end
+
+  return mod.options[opt_name]
+end
 
 
 function ob_defs_conflict(def1, def2)
@@ -424,7 +460,7 @@ function ob_set_mod_option(name, option, value)
     gui.printf("Ignoring unknown module: %s\n", name)
     return
   end
-    
+
   if option == "self" then
     -- convert 'value' from string to a boolean
     value = not (value == "false" or value == "0")
@@ -440,34 +476,36 @@ function ob_set_mod_option(name, option, value)
       each other,odef in OB_MODULES do
         if odef != mod and ob_defs_conflict(mod, odef) then
           odef.enabled = false
-          gui.change_button("module", other, odef.enabled)
+          gui.set_module(other, odef.enabled)
         end
       end
     end
 
-    -- this is required for parsing the CONFIG.CFG file
+    -- this is required for parsing the CONFIG.TXT file
     -- [but redundant when the user merely changed the widget]
-    gui.change_button("module", name, mod.enabled)
+    gui.set_module(name, mod.enabled)
 
     ob_update_all()
     return
   end
 
 
-  local def = mod.options and mod.options[option]
-  if not def then
+  local opt = ob_find_mod_option(mod, option)
+  if not opt then
     gui.printf("Ignoring unknown option: %s.%s\n", name, option)
     return
   end
 
-  -- this can only happen while parsing the CONFIG.CFG file
+  -- this can only happen while parsing the CONFIG.TXT file
   -- (containing some no-longer-used value).
-  if not def.avail_choices[value] then
+  if not opt.avail_choices[value] then
     warning("invalid choice: %s (for option %s.%s)\n", value, name, option)
     return
   end
 
-  def.value = value
+  opt.value = value
+
+  gui.set_module_option(name, option, value)
 
   -- no need to call ob_update_all
   -- (nothing ever depends on custom options)
@@ -485,6 +523,20 @@ function ob_set_config(name, value)
   if name == "seed" then
     OB_CONFIG[name] = tonumber(value) or 0
     return
+  end
+
+
+  -- check all the UI modules for a matching option
+  -- [ this is only needed when parsing the CONFIG.txt file ]
+  each _,mod in OB_MODULES do
+    if ob_check_ui_module(mod) then
+      each opt in mod.options do
+        if opt.name == name then
+          ob_set_mod_option(mod.name, name, value)
+          return
+        end
+      end
+    end
   end
 
 
@@ -516,69 +568,105 @@ function ob_set_config(name, value)
 
   OB_CONFIG[name] = value
 
-  if (name == "game") or (name == "mode") or (name == "engine") then
+  if name == "game" or name == "engine" then
     ob_update_all()
   end
 
-  -- this is required for parsing the CONFIG.CFG file
-  -- [but redundant when the user merely changed the widget]
-  if (name == "game") or (name == "engine") or (name == "theme") then
-    gui.change_button(name, OB_CONFIG[name])
+  -- this is required for parsing the CONFIG.TXT file
+  -- [ but redundant when the user merely changed the widget ]
+  if name == "game"  or name == "engine" or
+     name == "theme" or name == "length"
+  then
+    gui.set_button(name, OB_CONFIG[name])
   end
 end
 
 
 
-function ob_read_all_config(print_to_log)
+function ob_read_all_config(need_full, log_only)
 
   local function do_line(fmt, ...)
-    if print_to_log then
+    if log_only then
       gui.printf(fmt .. "\n", ...)
     else
       gui.config_line(string.format(fmt, ...))
     end
   end
 
-  local unknown = "XXX"
+  local function do_value(name, value)
+    do_line("%s = %s", name, value or "XXX")
+  end
 
-  do_line("game = %s",   OB_CONFIG.game or unknown)
-  do_line("mode = %s",   OB_CONFIG.mode or unknown)
-  do_line("engine = %s", OB_CONFIG.engine or unknown)
-  do_line("length = %s", OB_CONFIG.length or unknown)
-  do_line("seed = %d",   OB_CONFIG.seed or 0)
+  local function do_mod_value(name, value)
+    do_line("  %s = %s", name, value or "XXX")
+  end
+
+  ---| ob_read_all_config |---
+
+  -- workaround for a limitation in C++ code
+  if need_full == "" then
+     need_full = false
+  end
+
+  if OB_CONFIG.seed and OB_CONFIG.seed != 0 then
+    do_line("seed = %d",   OB_CONFIG.seed)
+    do_line("")
+  end
+
+  do_line("---- Game Settings ----")
   do_line("")
 
-  do_line("theme = %s",   OB_CONFIG.theme or unknown)
-  do_line("size = %s",    OB_CONFIG.size or unknown)
-  do_line("outdoors = %s",OB_CONFIG.outdoors or unknown)
-  do_line("caves = %s",   OB_CONFIG.caves or unknown)
+  do_value("game",     OB_CONFIG.game)
+  do_value("engine",   OB_CONFIG.engine)
+  do_value("length",   OB_CONFIG.length)
+  do_value("theme",    OB_CONFIG.theme)
+
   do_line("")
 
-  do_line("mons = %s",    OB_CONFIG.mons or unknown)
-  do_line("strength = %s",OB_CONFIG.strength or unknown)
-  do_line("weapons = %s", OB_CONFIG.weapons or unknown)
-  do_line("items = %s",   OB_CONFIG.items or unknown)
-  do_line("health = %s",  OB_CONFIG.health or unknown)
-  do_line("ammo = %s",    OB_CONFIG.ammo or unknown)
-  do_line("")
+  -- the UI modules/panels use bare option names
+  each name in table.keys_sorted(OB_MODULES) do
+    local def = OB_MODULES[name]
 
-  do_line("---- Modules ----")
+    if ob_check_ui_module(def) then
+      do_line("---- %s ----", def.label)
+      do_line("")
+
+      each opt in def.options do
+        do_value(opt.name, opt.value)
+      end
+
+      do_line("")
+    end
+  end
+
+  do_line("---- Other Modules ----")
   do_line("")
 
   each name in table.keys_sorted(OB_MODULES) do
     local def = OB_MODULES[name]
 
+    if ob_check_ui_module(def) then continue end
+
+    if not need_full and not def.shown then continue end
+
     do_line("@%s = %s", name, sel(def.enabled, "1", "0"))
-    do_line("")
 
     -- module options
-    if def.options and not table.empty(def.options) then
-      each o_name,opt in def.options do
-        do_line("%s = %s", o_name, opt.value or unknown)
+    if need_full or def.enabled then
+      if def.options and not table.empty(def.options) then
+        if def.options[1] then
+          each opt in def.options do
+            do_mod_value(opt.name, opt.value)
+          end
+        else
+          each o_name,opt in def.options do
+            do_mod_value(o_name, opt.value)
+          end
+        end
       end
-
-      do_line("")
     end
+
+    do_line("")
   end
 
   do_line("-- END --")
@@ -588,7 +676,7 @@ end
 
 function ob_load_game(game)
   -- 'game' parameter must be a sub-directory of the games/ folder
-  
+
   -- ignore the template game -- it is only instructional
   if game == "template" then return end
 
@@ -681,10 +769,6 @@ function ob_init()
     if fmt then gui.raw_debug_print(string.format(fmt, ...)) end
   end
 
-  gui.conprintf = function (fmt, ...)
-    if fmt then gui.raw_console_print(string.format(fmt, ...)) end
-  end
-
 
   gui.printf("~~ Oblige Lua initialization begun ~~\n\n")
 
@@ -736,7 +820,7 @@ function ob_init()
   local function create_buttons(what, DEFS)
     assert(DEFS)
     gui.debugf("creating buttons for %s\n", what)
-  
+
     local list = {}
 
     local min_priority = 999
@@ -756,21 +840,46 @@ function ob_init()
       table.insert(list, { priority=92, name="_", label="_" })
     end
 
-    if what == "theme" and min_priority < -1 then
-      table.insert(list, { priority=-1, name="_", label="_" })
+    if what == "theme" and min_priority < 79 then
+      table.insert(list, { priority=79, name="_", label="_" })
     end
 
     table.sort(list, button_sorter)
 
     each def in list do
-      gui.add_button(what, def.name, def.label, def.tooltip)
+      if what == "module" then
+        local where = def.side or "right"
 
+        gui.add_module(where, def.name, def.label, def.tooltip)
+      else
+        gui.add_choice(what, def.name, def.label)
+      end
+
+      -- TODO : review this, does it belong HERE ?
       if what == "game" then
-        gui.show_button(what, def.name, true)
+        gui.enable_choice("game", def.name, true)
       end
     end
 
-    return list[1] and list[1].name
+    -- set the current value
+    if what != "module" then
+      local default = list[1] and list[1].name
+
+      OB_CONFIG[what] = default
+    end
+  end
+
+
+  local function simple_buttons(what, choices, default)
+    for i = 1,#choices,2 do
+      local id    = choices[i]
+      local label = choices[i+1]
+
+      gui.   add_choice(what, id, label)
+      gui.enable_choice(what, id, true)
+    end
+
+    OB_CONFIG[what] = default
   end
 
 
@@ -781,22 +890,25 @@ function ob_init()
       if not mod.options then
         mod.options = {}
       else
-        local list = {}
+        local list = mod.options
 
-        each name,opt in mod.options do
-          opt.name = name
-          table.insert(list, opt)
+        -- handle lists (for UI modules) different from key/value tables
+        if list[1] == nil then
+          list = {}
+
+          each name,opt in mod.options do
+            opt.name = name
+            table.insert(list, opt)
+          end
+
+          table.sort(list, button_sorter)
         end
-
-        table.sort(list, button_sorter)
 
         each opt in list do
           assert(opt.label)
           assert(opt.choices)
 
-          gui.add_mod_option(mod.name, opt.name, nil, opt.label, opt.tooltip)
-
-          opt.value = opt.default or opt.choices[1]
+          gui.add_module_option(mod.name, opt.name, opt.label, opt.tooltip, opt.gap)
 
           opt.avail_choices = {}
 
@@ -804,11 +916,23 @@ function ob_init()
             local id    = opt.choices[i]
             local label = opt.choices[i+1]
 
-            gui.add_mod_option(mod.name, opt.name, id, label)
+            gui.add_option_choice(mod.name, opt.name, id, label)
             opt.avail_choices[id] = 1
           end
 
-          gui.change_mod_option(mod.name, opt.name, opt.value)
+          -- select a default value
+          if not opt.default then
+                if opt.avail_choices["default"] then opt.default = "default"
+            elseif opt.avail_choices["normal"]  then opt.default = "normal"
+            elseif opt.avail_choices["medium"]  then opt.default = "medium"
+            elseif opt.avail_choices["mixed"]   then opt.default = "mixed"
+            else   opt.default = opt.choices[1]
+            end
+          end
+
+          opt.value = opt.default
+
+          gui.set_module_option(mod.name, opt.name, opt.value)
         end -- for opt
       end
     end -- for mod
@@ -816,22 +940,22 @@ function ob_init()
 
 
   OB_CONFIG.seed = 0
-  OB_CONFIG.mode = "sp" -- GUI code sets the real default
 
-  OB_CONFIG.game   = create_buttons("game",   OB_GAMES)
-  OB_CONFIG.engine = create_buttons("engine", OB_ENGINES)
-  OB_CONFIG.theme  = create_buttons("theme",  OB_THEMES)
+  create_buttons("game",   OB_GAMES)
+  create_buttons("engine", OB_ENGINES)
+  create_buttons("theme",  OB_THEMES)
 
-  OB_CONFIG.theme  = "mixed"
+  simple_buttons("length",   LENGTH_CHOICES,   "game")
 
   create_buttons("module", OB_MODULES)
   create_mod_options()
 
   ob_update_all()
 
-  gui.change_button("game",   OB_CONFIG.game)
-  gui.change_button("engine", OB_CONFIG.engine)
-  gui.change_button("theme",  OB_CONFIG.theme)
+  gui.set_button("game",     OB_CONFIG.game)
+  gui.set_button("engine",   OB_CONFIG.engine)
+  gui.set_button("length",   OB_CONFIG.length)
+  gui.set_button("theme",    OB_CONFIG.theme)
 
   gui.printf("\n~~ Completed Lua initialization ~~\n\n")
 end
@@ -893,6 +1017,7 @@ function ob_merge_table_list(tab_list)
 end
 
 
+
 function ob_add_current_game()
   local function recurse(name, child)
     local def = OB_GAMES[name]
@@ -929,6 +1054,7 @@ function ob_add_current_game()
 end
 
 
+
 function ob_add_current_engine()
   local function recurse(name, child)
     local def = OB_ENGINES[name]
@@ -956,13 +1082,15 @@ function ob_add_current_engine()
 end
 
 
+
 function ob_sort_modules()
   GAME.modules = {}
 
   -- find all the visible & enabled modules
+  -- [ ignore the special UI modules/panels ]
 
   each _,mod in OB_MODULES do
-    if mod.enabled and mod.shown then
+    if mod.enabled and mod.shown and not ob_check_ui_module(mod) then
       table.insert(GAME.modules, mod)
     end
   end
@@ -984,6 +1112,7 @@ function ob_sort_modules()
 end
 
 
+
 function ob_invoke_hook(name, ...)
   -- two passes, for example: setup and setup2
   for pass = 1,2 do
@@ -1000,8 +1129,36 @@ function ob_invoke_hook(name, ...)
 end
 
 
+
+function ob_transfer_ui_options()
+  each _,mod in OB_MODULES do
+    if ob_check_ui_module(mod) then
+      each opt in mod.options do
+        OB_CONFIG[opt.name] = opt.value or "UNSET"
+      end
+    end
+  end
+
+  -- fixes for backwards compatibility
+  if OB_CONFIG.length == "full" then
+     OB_CONFIG.length = "game"
+  end
+
+  if OB_CONFIG.theme == "mixed" then
+     OB_CONFIG.theme = "epi"
+  end
+
+  if OB_CONFIG.size == "tiny" then
+     OB_CONFIG.size = "small"
+  end
+end
+
+
+
 function ob_build_setup()
   ob_clean_up()
+
+  ob_transfer_ui_options()
 
   ob_sort_modules()
 
@@ -1011,7 +1168,7 @@ function ob_build_setup()
   ob_add_current_engine()
 
   -- merge tables from each module
-  -- [ but skip GAME and ENGINE which are already merged ]
+  -- [ but skip GAME and ENGINE, which are already merged ]
 
   each mod in GAME.modules do
     if _index > 2 and mod.tables then
@@ -1048,17 +1205,8 @@ function ob_build_setup()
 
   gui.property("spot_low_h",  PARAM.spot_low_h)
   gui.property("spot_high_h", PARAM.spot_high_h)
-
-
-  -- backwards compatibility
-  if OB_CONFIG.length == "full" then
-     OB_CONFIG.length = "game"
-  end
-
-  if OB_CONFIG.size == "tiny" then
-     OB_CONFIG.size = "small"
-  end
 end
+
 
 
 function ob_clean_up()
@@ -1076,6 +1224,7 @@ function ob_clean_up()
 end
 
 
+
 function ob_build_cool_shit()
   assert(OB_CONFIG)
   assert(OB_CONFIG.game)
@@ -1083,7 +1232,7 @@ function ob_build_cool_shit()
   gui.printf("\n\n")
   gui.printf("~~~~~~~ Making Levels ~~~~~~~\n\n")
 
-  ob_read_all_config(true)
+  ob_read_all_config(false, "log_only")
 
   gui.ticker()
 

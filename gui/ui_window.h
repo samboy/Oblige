@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2011 Andrew Apted
+//  Copyright (C) 2006-2016 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -24,8 +24,6 @@
 
 #define WINDOW_BG  fl_gray_ramp(3)
 
-#define BUILD_BG   fl_gray_ramp(2)
-
 
 // support for scaling up the GUI
 extern int KF;  // Kromulent Factor : -1 .. 3
@@ -44,11 +42,10 @@ public:
 
 	UI_Game   *game_box;
 
-	UI_Level  *level_box;
-	UI_Play   *play_box;
-
 	UI_Build  *build_box;
-	UI_CustomMods *mod_box;
+
+	UI_CustomMods * left_mods;
+	UI_CustomMods *right_mods;
 
 public:
 	UI_MainWin(int W, int H, const char *title);

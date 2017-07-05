@@ -32,6 +32,7 @@ If the phrase is not there, then feel free to ask us
 </div>
 
 
+
 <div id="next_release" class="faq_Q">
 Q/ When is the next release?
 </div>
@@ -42,17 +43,15 @@ Short answer: <i>When it's ready.</i>
 <p>
 Long answer:
 This is just a hobby project, and
-while there is a little bit of long-term planning,
-there is no real roadmap,
-just a bunch of features we'd like to add one day.
-With each release we try to fix as many problems as we can,
-while introducing new features and better ways
-of doing things.
-Sometimes there will be some very experimental code,
-which you won't see because it will stay disabled until
-it's ready for general use.
+development simply takes a long time.
+
+There is no roadmap or milestones,
+just a little bit of long-term planning and
+a whole bunch of features we'd like to add,
+plus a never-ending list of bugs to be fixed.
 
 </div>
+
 
 
 <div id="games" class="faq_Q">
@@ -60,44 +59,52 @@ Q/ Is game XXX going to be supported?
 </div>
 
 <div class="faq_A">
-It depends greatly on the game...
+<i>(Answer updated: September 2016)</i>
 
 <p>
-Some games, like Wolf-3D, are simply too old and limited
-for the way that OBLIGE works.
-Supporting them would require a whole different method of
-generating the levels -- and while it is definitely possible
-(as shown by the RANDWOLF program),
-there is absolutely no desire to work on it.
+Right now, development is concentrated purely on the
+DOOM family of games.
+Other games are not even on the radar at the moment.
 
 <p>
-Modern games, anything released after 2000 or so
-(like Doom 3, for example) have map formats which are too
-complicated and/or too poorly documented (if at all).
-Hence it becomes too hard to write the CSG code to
-generate those formats.
+That is because we want the generation of DOOM maps
+to become as good as possible, ironing out all the
+issues with the new shape grammar system, and getting the
+code to be really clean, stable and robust.
+
+Only when that is achieved does it make sense to
+begin to target other games, having a solid
+foundation to build upon.
 
 <p>
-Some games have a style of gameplay which is different
-than the find-all-keys &amp; kill-all-monsters
-style which you see in DOOM or Quake.
-Games with extensive RPG elements, or a game like Thief
-where sneaking around is a primary concern, would probably
-require a lot of new logic to support them well.
+Turning to the question of <i>which</i> games to support:
+
+the most likely candidates will be games which are based
+on the DOOM engine, such as Heretic and Hexen.
+
+Games like Wolfenstein-3D and Blakestone are simply too
+limited, and actually make me nauseous when playing them,
+so there is no desire to work on them.
+
+Games released after the year 2000 or so,
+like Doom 3, have map formats which are too
+complicated or too poorly documented,
+making it almost impossible to write the necessary CSG code.
 
 <p>
-Finally, I am only one person and can only do so much.
-One day hopefully OBLIGE will become so popular that other
-programmers will volunteer to develop and maintain the code
-for a particular game that they like.
-Until then, it is probably better to have a few games which
-work really well, instead of lots of games where each one is
-only very basic.
+Also some games have a style of gameplay which is differs
+from the find-all-keys &amp; kill-all-monsters
+style which you see in DOOM.
+So games which have extensive RPG elements,
+or a game like Thief where sneaking around is a primary concern,
+would probably require a lot of new logic to support them well.
 
 <p>
-<i>See also this forum post:</i>
-<a href="http://oblige.sourceforge.net/forum/index.php?topic=118.0">Possible Games</a>.
+<i>(See also this forum post:
+<a href="http://oblige.sourceforge.net/forum/index.php?topic=118.0">Possible Games</a>)</i>
+
 </div>
+
 
 
 <div id="vanilla" class="faq_Q">
@@ -130,29 +137,86 @@ keeps those limitations in place)</i>
 </div>
 
 
+
 <div id="deathmatch" class="faq_Q">
 Q/ Can Deathmatch maps be created?
 </div>
 
 <div class="faq_A">
-The old version (V2) could make them (for DOOM etc), but this has not been
-implemented in the newest versions.
-Let me explain why:
+Not at the moment.
+One reason is that there hasn't been much demand for
+such maps to be generated.
 
 <p>
+The other reason is the nature of these maps.
 With single player or co-op, you will play the map once
 and move on to the next.
 It doesn't need to be a masterpiece to be fun.
 
+<p>
 However with DM or CTF you usually play the map for
 long periods of time, learning the layout well so you can
 concentrate on tactics.
 Hence the layout and flow of the map
 is absolutely critical, and it should be nice to look at too
-since you are spending so much time in there.
-The bar is much higher for generating these
-kinds of maps.
+since you are spending a lot of time in there.
+Generating maps of sufficient quality is much harder to achieve.
 </div>
+
+
+
+<div id="map_names" class="faq_Q">
+Q/ Map names should depend on what elements are present,
+or vice versa.
+</div>
+
+<div class="faq_A">
+That would be really nice, but it's also really hard to achieve.
+
+<p>
+One possible way would be to generate the name first,
+before the map itself,
+then check the name for various keywords to
+decide what elements to use on the map.
+For example, if the name mentioned "Lava" then force the liquid
+areas in the map to use the lava texture.
+The problem is that this can conflict with the
+settings chosen by the user.
+So if the user has set "liquids" to NONE,
+then they're gonna be annoyed when they discover a level
+with lava in it.
+
+<p>
+That leaves the only other possible way:
+generate the map first, remembering what elements were used,
+then generate the name of the map, and somehow make the
+components in the name match the actual elements used.
+For example, if the liquid of the map was lava, then we
+should favor names containing "Lava" and skip names
+containing "Water" or "Nukage".
+It is not clear how to achieve that with the current naming system.
+
+</div>
+
+
+
+<div id="hodgepodge" class="faq_Q">
+Q/ Wouldn't it be cool if OBLIGE could build maps using all the
+different methods of previous versions?
+</div>
+
+<div class="faq_A">
+No, that would mean having three or four different level
+generators in the same program, and thus require three or four
+times the amount of work!
+
+<p>
+Instead of that, we are looking for a method to generate levels
+that is as simple as possible while still producing very good
+results, and it seems the V7 system can achieve that.
+
+</div>
+
 
 
 <div id="prebuilt" class="faq_Q">
@@ -160,17 +224,16 @@ Q/ I don't like the pre-built maps, will OBLIGE make its own Boss maps?
 </div>
 
 <div class="faq_A">
-Boss maps usually have special layouts or special requirements
-which are
-hard to account for (e.g. killing all the Barons in E1M8 of
-DOOM lowers a wall, and a teleporter takes you to a small
-dark room with a special floor type).
+Not yet, though it is planned to eventually generate Boss maps.
 
 <p>
-Perhaps one day OBLIGE can make them, but it is not a high
-priority task.
+Boss maps usually have special layouts or special requirements,
+like killing all the Barons in E1M8 of DOOM will lower a wall,
+so the code will have to support all those special things, and
+it will be a lot of work.
 
 </div>
+
 
 
 <div id="compile" class="faq_Q">
@@ -178,14 +241,14 @@ Q/ How do I compile the EXE?
 </div>
 
 <div class="faq_A">
-Firstly, be aware you can change the Lua files,
-such as games/doom/monsters.lua or scripts/rooms.lua,
+Firstly, be aware you can edit the Lua code,
+like the <code>games/doom/monsters.lua</code> file,
 without having to compile anything.
 OBLIGE will load your changes the next time you run it.
 
 <p>
 Compiling Oblige.exe is fairly complicated,
-and I simply don't have the time or inclination to teach
+and we simply don't have the time or inclination to teach
 complete strangers on the internet the basics of compilers,
 makefiles, libraries and all that stuff.
 Sorry -- it's nothing personal,
@@ -204,11 +267,12 @@ Q/ You must do such and such, I demand it!
 <div class="faq_A">
 Hey, you got this program for free and nobody is
 getting paid to work on it.
-That means you have NO RIGHT to demand anything from us.
+So you have no right to demand anything from us.
 
 <p>
-However if you have a request and ask nicely, it <i>will</i> be
-considered.
+So please don't nag us to implement something.
+If you have a request and ask nicely,
+we will definitely consider it.
 
 </div>
 

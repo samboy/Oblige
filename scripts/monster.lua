@@ -4,7 +4,7 @@
 --
 --  Oblige Level Maker
 --
---  Copyright (C) 2008-2016 Andrew Apted
+--  Copyright (C) 2008-2017 Andrew Apted
 --
 --  This program is free software; you can redistribute it and/or
 --  modify it under the terms of the GNU General Public License
@@ -43,7 +43,6 @@ function Monster_init()
         LEVEL.mon_replacement[orig][name] = info.replace_prob
       end
     end
-
   end
 
   -- remove a replacement monster if the monster it replaces
@@ -58,10 +57,6 @@ end
 function Monster_prepare()
  
   ---| Monster_prepare |---
-
-  if OB_CONFIG.mode == "dm" or OB_CONFIG.mode == "ctf" then
-    return
-  end
 
   Monster_init()
 end
@@ -98,7 +93,7 @@ function Monster_pacing()
     room_list = {}
 
     each R in LEVEL.rooms do
-      if R.kind == "hallway" or R.is_secret then
+      if R.is_hallway or R.is_secret then
         R.pressure = "low"
         continue
       end
@@ -808,7 +803,7 @@ function Monster_fill_room(R)
 
 
   local function number_of_kinds()
-    if R.kind == "hallway" then
+    if R.is_hallway then
       return rand.sel(66, 1, 2)
     end
 
@@ -869,6 +864,11 @@ function Monster_fill_room(R)
       assert(qty)
     end
 
+    -- hallways have limited spots
+    if R.is_hallway then
+      return qty * rand.pick({10,20,30})
+    end
+
     -- less in secrets (usually much less)
     if R.is_secret then
       qty = qty * 2
@@ -880,13 +880,8 @@ function Monster_fill_room(R)
     qty = qty * (PARAM.monster_factor or 1)
     qty = qty * (THEME.monster_factor or 1)
 
-    -- more monsters for Co-operative games
-    if OB_CONFIG.mode == "coop" then
-      qty = qty * COOP_MON_FACTOR
-    end
-
     -- apply the room "pressure" type
-    if R.pressure == "low"  then qty = qty / 2.4 end
+    if R.pressure == "low"  then qty = qty / 2.5 end
     if R.pressure == "high" then qty = qty * 1.5 end
 
     -- game along adjustment
@@ -906,7 +901,7 @@ function Monster_fill_room(R)
 
   local function categorize_room_size()
     -- hallways are always small : allow any monsters
-    if R.kind == "hallway" then return end
+    if R.is_hallway then return end
 
     -- anything goes for the final battle
     if R.is_exit then return end
@@ -915,7 +910,7 @@ function Monster_fill_room(R)
     if rand.odds(6) then return end
 
     -- often allow any monsters in caves
-    if R.kind == "cave" and rand.odds(27) then return end
+    if R.is_cave and rand.odds(27) then return end
 
     -- value depends on total area of monster spots
     local area = 0
@@ -934,7 +929,7 @@ function Monster_fill_room(R)
     area = area * rand.range(0.80, 1.25)
 
     -- caves are often large -- adjust for that
-    if R.kind == "cave" then area = area / 2 - 8 end
+    if R.is_cave then area = area * 0.7 - 8 end
 
     if area < 4 then
       R.room_size = "small"
@@ -1037,8 +1032,8 @@ function Monster_fill_room(R)
 
 
   local function mark_ambush_spots()
-    if R.kind == "hallway" then return end
-    if R.kind == "cave" then return end
+    if R.is_hallway then return end
+    if R.is_cave or R.is_park then return end
 
     -- this also determines the 'central_dist' field of spots
 
@@ -1082,22 +1077,28 @@ function Monster_fill_room(R)
   end
 
 
+  local function default_level(info)
+    local hp = info.health
+
+    if hp < 45  then return 1 end
+    if hp < 130 then return 3 end
+    if hp < 450 then return 5 end
+
+    return 7
+  end
+
+
   local function calc_strength_factor(info)
-    local factor = (info.level or 1)
-
     -- weaker monsters in secrets
-    if R.is_secret then return 1 / factor end
+    if R.is_secret then return 1 / info.damage end
 
-    local low  = (10 - factor) / 9
-    local high = factor / 9
+    local factor = default_level(info)
 
-    assert(low > 0)
+    if OB_CONFIG.strength == "weak"   then return 1 / (1.7 ^ factor) end
+    if OB_CONFIG.strength == "easier" then return 1 / (1.3 ^ factor) end
 
-    if OB_CONFIG.strength == "weak"   then return low  ^ 1.5 end
-    if OB_CONFIG.strength == "tough"  then return high ^ 1.5 end
-
-    if OB_CONFIG.strength == "easier" then return low  ^ 0.5 end
-    if OB_CONFIG.strength == "harder" then return high ^ 0.5 end
+    if OB_CONFIG.strength == "harder" then return 1.3 ^ factor end
+    if OB_CONFIG.strength == "tough"  then return 1.7 ^ factor end
 
     return 1.0
   end
@@ -1115,7 +1116,7 @@ function Monster_fill_room(R)
       return 0
     end
 
-    if info.min_weapon and not Player_has_min_weapon(info.min_weapon) then
+    if info.weap_min_damage and info.weap_min_damage > Player_max_damage() then
       return 0
     end
 
@@ -1204,7 +1205,7 @@ function Monster_fill_room(R)
   local function crazy_palette()
     local num_kinds
 
-    if R.kind == "hallway" then
+    if R.is_hallway then
       num_kinds = rand.index_by_probs({ 20, 40, 60 })
     else
       local size = math.sqrt(R.svolume)
@@ -1223,9 +1224,7 @@ function Monster_fill_room(R)
       end
 
       -- weaker monsters in secrets
-      if R.is_secret then
-        prob = prob / (info.level or 1)
-      end
+      if R.is_secret then prob = prob / info.damage end
 
       if prob > 0 then
         list[mon] = prob
@@ -1396,10 +1395,10 @@ function Monster_fill_room(R)
     -- monsters in traps are never deaf (esp. monster depots)
     if mode then
       deaf = false
-    elseif spot.ambush then
+    elseif spot.ambush or info.boss_type or R.is_hallway then
       deaf  = rand.odds(95)
       focus = spot.ambush
-    elseif R.kind == "cave" or R.kind == "hallway" or info.float then
+    elseif R.is_cave or info.float then
       deaf = rand.odds(65)
     else
       deaf = rand.odds(35)
@@ -1411,7 +1410,7 @@ function Monster_fill_room(R)
 
     local angle
 
-    if (mode or R.kind == "hallway") and spot.angle then
+    if (mode or R.is_hallway) and spot.angle then
       angle = spot.angle
     else
       angle = monster_angle(spot, x, y, z, focus)
@@ -1420,7 +1419,7 @@ function Monster_fill_room(R)
     -- minimum skill needed for the monster to appear
     local skill = calc_min_skill(all_skills)
 
-    local props = { }
+    local props = {}
 
     props.angle = angle
 
@@ -1450,7 +1449,8 @@ function Monster_fill_room(R)
 
 
   local function mon_fits(mon, spot)
-    local info  = GAME.MONSTERS[mon]
+    local info  = GAME.MONSTERS[mon] or
+                  GAME.ENTITIES[mon]
 
     if info.h >= (spot.z2 - spot.z1) then return 0 end
 
@@ -1494,6 +1494,36 @@ function Monster_fill_room(R)
   end
 
 
+  local function place_decor_in_spot(ent_name, spot)
+    local info = GAME.ENTITIES[ent_name]
+
+    if not info then
+      error("Unknown decoration: " .. tostring(ent_name))
+    end
+
+    local x, y = geom.box_mid (spot.x1, spot.y1, spot.x2, spot.y2)
+    local w, h = geom.box_size(spot.x1, spot.y1, spot.x2, spot.y2)
+
+    local z = spot.z1
+
+    -- move decoration entity to random place within the box
+    local dx = w / 2 - info.r
+    local dy = h / 2 - info.r
+
+    if dx > 0 then
+      x = x + rand.range(-dx, dx)
+    end
+
+    if dy > 0 then
+      y = y + rand.range(-dy, dy)
+    end
+
+    local props = {}
+
+    Trans.entity(ent_name, x, y, z, props)
+  end
+
+
   local function spot_compare(A, B)
     if A.find_score != B.find_score then
       return A.find_score > B.find_score
@@ -1504,6 +1534,8 @@ function Monster_fill_room(R)
 
 
   local function grab_monster_spot(mon, near_to, reqs)
+    -- this is used for decor items too
+
     local total = 0
 
     each spot in R.mon_spots do
@@ -1608,6 +1640,24 @@ function Monster_fill_room(R)
   end
 
 
+  local function try_add_decor_group(ent_tab, count)
+    local reqs = {}
+    local last_spot
+
+    for i = 1, count do
+      local ent_name = rand.key_by_probs(ent_tab)
+
+      local spot = grab_monster_spot(ent_name, last_spot, reqs)
+
+      if not spot then break; end
+
+      place_decor_in_spot(ent_name, spot)
+
+      last_spot = spot
+    end
+  end
+
+
   local function how_many_dudes(palette, want_total)
     -- the 'NONE' entry is a stabilizing element, in case we have a
     -- palette containing mostly undesirable monsters.
@@ -1691,7 +1741,7 @@ gui.debugf("wants =\n%s\n\n", table.tostr(wants))
     -- do not produce groups of nasties
     if info.nasty then return 1 end
 
-    if R.kind == "hallway" then
+    if R.is_hallway then
       return rand.sel(50, 1, 2)
     end
 
@@ -1952,14 +2002,14 @@ gui.debugf("   doing spot : Mon=%s\n", tostring(mon))
         end
 
         if mon then
-          gui.printf("Using replacement boss: %s --> %s\n", bf.mon, mon)
+          warning("Using replacement boss: %s --> %s\n", bf.mon, mon)
 
           spot = grab_monster_spot(mon, R.guard_chunk, reqs)
         end
       end
 
       if not spot then
-        gui.printf("Cannot place boss monster: %s\n", bf.mon)
+        warning("Cannot place boss monster: %s\n", bf.mon)
         break;
       end
 
@@ -1976,9 +2026,6 @@ gui.debugf("   doing spot : Mon=%s\n", tostring(mon))
 
 
   local function add_monsters()
-
-    fodder_tally = tally_spots(R.mon_spots)
-      cage_tally = tally_cage_spots()
 
     -- sometimes prevent monster replacements
     if rand.odds(40) or OB_CONFIG.strength == "crazy" then
@@ -2017,19 +2064,64 @@ gui.debugf("FILLING TRAP in %s\n", R.name)
 
 
   local function add_destructibles()
-    -- add barrels or other DESTRUCTIBLE decorations
-    -- [ these objects may block player paths, hence must be destroyable ]
+    -- add destructible decorations, especially DOOM barrels
 
-    if STYLE.barrels == "none" then return end
+    if not THEME.barrels then return end
 
-    local barrel_chance = sel(R.is_outdoor, 2, 15)
---??    if R.natural then barrel_chance = 3 end
---??    if R.hallway then barrel_chance = 5 end
+    local room_prob = style_sel("barrels", 0, 25, 50, 75)
+    local each_prob = style_sel("barrels", 0, 10, 30, 80)
 
-    if STYLE.barrels == "heaps" or rand.odds( 5) then barrel_chance = barrel_chance * 4 + 10 end
-    if STYLE.barrels == "few"   or rand.odds(25) then barrel_chance = barrel_chance / 4 end
+    if not rand.odds(room_prob) then
+      return
+    end
 
-    -- FIXME : get barrels working again
+    -- compute maximum # of barrel groups to add
+    local qty = 15
+
+    if rand.odds(10) then qty = qty * 2 end
+    if rand.odds(10) then qty = qty / 2 end
+
+    local tally = (1 + fodder_tally ^ 0.7) * qty / 100
+
+    local want_num = rand.int(tally)
+
+    for i = 1, want_num do
+      if rand.odds(each_prob) then
+        local group_size = rand.index_by_probs({ 20,40,20,5,1 })
+
+        try_add_decor_group(THEME.barrels, group_size)
+      end
+    end
+  end
+
+
+  local function add_passable_decor()
+    if not THEME.passable_decor then return end
+
+    local room_prob = 80
+    local  use_prob = 25
+
+    if not rand.odds(room_prob) then
+      return
+    end
+
+    -- compute maximum # of decor to use
+    local qty = 24
+
+    if rand.odds(10) then qty = qty * 2 end
+    if rand.odds(10) then qty = qty / 2 end
+
+    local tally = (1 + fodder_tally ^ 0.7) * qty / 100
+
+    local want_num = rand.int(tally)
+
+    for i = 1, want_num do
+      if rand.odds(use_prob) then
+        local group_size = rand.index_by_probs({ 64,8,1 })
+
+        try_add_decor_group(THEME.passable_decor, group_size)
+      end
+    end
   end
 
 
@@ -2040,9 +2132,12 @@ gui.debugf("FILLING TRAP in %s\n", R.name)
 
     if R.no_monsters then return false end
 
-    if R.kind == "stairwell" then return false end
+    return true  -- YES --
+  end
 
-    return true  -- OK --
+
+  local function should_add_decor()
+    return true  -- YES --
   end
 
 
@@ -2055,7 +2150,7 @@ gui.debugf("FILLING TRAP in %s\n", R.name)
 
     R.sneakiness = rand.sel(30, 95, 25)
 
-    if R.kind != "hallway" and R.entry_coord then
+    if R.entry_coord then
       R.furthest_dist = R:furthest_dist_from_entry()
     end
 
@@ -2083,12 +2178,18 @@ gui.debugf("FILLING TRAP in %s\n", R.name)
 
   prepare_room()
 
+  fodder_tally = tally_spots(R.mon_spots)
+    cage_tally = tally_cage_spots()
+
   if should_add_monsters() then
     add_bosses()
     add_monsters()
   end
 
-  add_destructibles()
+  if should_add_decor() then
+    add_destructibles()
+    add_passable_decor()
+  end
 end
 
 
@@ -2126,19 +2227,11 @@ function Monster_make_battles()
 
   gui.prog_step("Mons")
 
-  if OB_CONFIG.mode == "dm" or
-     OB_CONFIG.mode == "ctf"
-  then
-    Multiplayer_add_items()
-    return
-  end
-
   Player_init()
 
   Player_give_map_stuff()
   Player_weapon_palettes()
 
-  Monster_assign_bosses()
   Monster_zone_palettes()
 
   -- Rooms have been sorted into a visitation order, so we just
@@ -2152,6 +2245,8 @@ function Monster_make_battles()
     Monster_fill_room(R)
 
     Item_simulate_battle(R)
+
+    gui.ticker()
   end
 
   Monster_show_stats()

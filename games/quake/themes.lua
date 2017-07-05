@@ -23,11 +23,6 @@ QUAKE.THEMES =
       k_gold   = 20
     }
 
-    switches =
-    {
-      sw_metal = 50
-    }
-
     fences =
     {
       ROCK5_2 = 50
@@ -83,22 +78,6 @@ QUAKE.THEMES =
 
 QUAKE.ROOM_THEMES =
 {
-  any_Stairwell =
-  {
-    env = "stairwell"
-
-    walls =
-    {
-      BRICKA2_1 = 30
-    }
-
-    floors =
-    {
-      WOOD1_1 = 50
-    }
-  }
-
-
   any_Hallway =
   {
     env = "hallway"
@@ -168,7 +147,7 @@ QUAKE.ROOM_THEMES =
 
   q1_tech_Outdoors =
   {
-    env = "outdoors"
+    env = "outdoor"
 
     floors =
     {
@@ -226,7 +205,7 @@ QUAKE.ROOM_THEMES =
 
   q1_castle_Outdoors =
   {
-    env = "outdoors"
+    env = "outdoor"
 
     floors =
     {
@@ -271,7 +250,7 @@ QUAKE.ROOMS =
 {
   GENERIC =
   {
-    environment = "any"
+    env = "any"
   }
 }
 

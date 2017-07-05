@@ -32,9 +32,9 @@ cp -av prefabs $dest/prefabs
 #
 #  Data files
 #
-cp -av data $dest/data
-
-mkdir $dest/addons
+cp -av data     $dest/data
+cp -av addons   $dest/addons
+cp -av language $dest/language
 
 rm -f $dest/data/*.wad
 rm -f $dest/data/*.pak
@@ -61,7 +61,9 @@ mkdir $dest/physfs_src
 cp -av physfs_src/*.[chrt]* $dest/physfs_src
 
 mkdir $dest/misc
-cp -av misc/pack*.sh $dest/misc
+cp -av misc/*.sh $dest/misc
+cp -av misc/oblige.* $dest/misc
+cp -av misc/icon*.* $dest/misc
 
 mkdir $dest/obj_linux
 mkdir $dest/obj_linux/lua

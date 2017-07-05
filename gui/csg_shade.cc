@@ -71,6 +71,13 @@ Lighting Model
    floor will be the same, then adjusted by "light_add" or "shadow"
    values in the top/bottom faces of the brushes.
 
+---##  in caves, certain entities (torches) are used as light sources,
+---##  and we trace rays to see what nearby cells should be lit by them
+---##  (less light for further distances).
+---##
+---##  floor brushes need "is_cave = 1" in top face of floor brushes,
+---##  and torch entities need a "cave_light = 48" field.
+
 */
 
 
@@ -80,47 +87,34 @@ Lighting Model
 static int current_region_group;
 
 
-#if 0  // NOT USED, BUT POTENTIALLY USEFUL
+#if 0   // DISABLED, WE DO TORCH RAY-TRACING IN LUA CODE
 
-struct outdoor_box_t
+static std::vector< csg_entity_c *> cave_lights;
+
+static void SHADE_CollectLights()
 {
-	int x1, y1, x2, y2;
-};
+	cave_lights.clear();
 
-
-static void SHADE_CollectBoxes()
-{
-	outdoor_box_t box;
-
-	for (unsigned int i = 0 ; i < all_entities.size() ; i++)
+	for (unsigned int i = 0 ; i < all_regions.size() ; i++)
 	{
-		csg_entity_c *E = all_entities[i];
+		region_c * R = all_regions[i];
 
-		if (strcmp(E->id.c_str(), "oblige_box") != 0)
+		// closed regions never provide light
+		if (R->isClosed())
 			continue;
 
-		const char *box_type = E->props.getStr("box_type", "");
-
-		if (strcmp(box_type, "outdoor") != 0)
-			continue;
-
-		box.x1 = E->props.getInt("x1");
-		box.y1 = E->props.getInt("y1");
-		box.x2 = E->props.getInt("x2");
-		box.y2 = E->props.getInt("y2");
-
-		if (box.x1 >= box.x2 || box.y1 >= box.y2)
+		for (unsigned int k = 0 ; k < R->entities.size() ; k++)
 		{
-			LogPrintf("WARNING: bad outdoor box: (%d %d) .. (%d %d)\n",
-					  box.x1, box.y1, box.x2, box.y2);
-			continue;
-		}
+			csg_entity_c *E = R->entities[k];
 
-		outdoor_boxes.push_back(box);
+			if (E->props.getInt("cave_light", 0) > 0)
+				cave_lights.push_back(E);
+		}
 	}
+
+	LogPrintf("Found %d cave light entities\n", (int)cave_lights.size());
 }
 #endif
-
 
 
 static int SHADE_CalcRegionGroup(region_c *R)
@@ -157,7 +151,7 @@ static int SHADE_CalcRegionGroup(region_c *R)
 
 	int xor_val = 0;
 
-	if (T->bkind == BKIND_Sky)  // separate sky sectors  [ why?? ]
+	if (T->bflags & BFLAG_Sky)  // separate sky sectors  [ why?? ]
 		xor_val = 0x77777777;
 
 	int result = current_region_group;
@@ -222,6 +216,57 @@ static void SHADE_MergeResults()
 }
 
 
+#if 0
+static int SHADE_CaveLighting(region_c *R, double z2)
+{
+	int result = 0;
+
+	double x2 = R->mid_x;
+	double y2 = R->mid_y;
+
+	for (unsigned int k = 0 ; k < cave_lights.size() ; k++)
+	{
+		csg_entity_c *E = cave_lights[k];
+
+		double x1 = E->x;
+		double y1 = E->y;
+		double z1 = E->z + 64.0;
+
+//??	int brightness = E->props.getInt("cave_light", 0);
+
+		// basic distance check
+		if (fabs(x1 - x2) > 500 || fabs(y1 - y2) > 500)
+			continue;
+
+		// more complex distance check
+		double dist = ComputeDist(x1, y1, x2, y2);
+
+		int level;
+
+		if (dist <= 104)
+			level = 48;
+		else if (dist <= 232)
+			level = 32;
+		else if (dist <= 488)
+			level = 16;
+		else
+			continue;
+
+		if (level < result)
+			continue;
+
+		// line of sight blocked?
+		if (CSG_TraceRay(x1,y1,z1, x2,y2,z2, "v"))
+			continue;
+
+		result = level;
+	}
+
+	return result;
+}
+#endif
+
+
 static void SHADE_VisitRegion(region_c *R)
 {
 	csg_brush_c *B = R->gaps.front()->bottom;
@@ -261,7 +306,7 @@ static void SHADE_VisitRegion(region_c *R)
 
 		int sky_shadow = LB->props.getInt("sky_shadow", -1);
 
-		if (sky_shadow > 0 && T->bkind == BKIND_Sky)
+		if (sky_shadow > 0 && (T->bflags & BFLAG_Sky))
 			shadow = MAX(shadow, sky_shadow);
 	}
 
@@ -277,6 +322,19 @@ static void SHADE_VisitRegion(region_c *R)
 		light  = MAX(light,  fc_light);
 		shadow = MAX(shadow, fc_shadow);
 	}
+
+#if 0  // DISABLED, WE DO THIS IN LUA CODE NOW
+	// check torch entities in caves
+	if (B->t.face.getInt("is_cave"))
+	{
+		double z2 = B->t.z + 80.0;
+
+		int cave = SHADE_CaveLighting(R, z2);
+
+		if (cave > 0)
+			light = MAX(light, cave);
+	}
+#endif
 
 	// combine them
 
@@ -310,13 +368,15 @@ static void SHADE_LightWorld()
 		}
 
 		SHADE_VisitRegion(R);
-	} 
+	}
 }
 
 
 void CSG_Shade()
 {
 	LogPrintf("Lighting level...\n");
+
+//	SHADE_CollectLights();
 
 	SHADE_GroupRegions();
 	SHADE_LightWorld();

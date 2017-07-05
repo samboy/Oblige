@@ -2,7 +2,7 @@
 --  TNT Evilution
 --------------------------------------------------------------------
 --
---  Copyright (C) 2006-2015 Andrew Apted
+--  Copyright (C) 2006-2016 Andrew Apted
 --  Copyright (C) 2011,2014 Chris Pisarczyk
 --
 --  This program is free software; you can redistribute it and/or
@@ -17,7 +17,10 @@ TNT = { }
 
 TNT.PARAMETERS =
 {
-  bex_map_prefix = "THUSTR_"
+  bex_map_prefix  = "THUSTR_"
+
+  bex_secret_name  = "T5TEXT"
+  bex_secret2_name = "T6TEXT"
 }
 
 
@@ -184,20 +187,43 @@ TNT.THEMES =
       lava  = 10
     }
 
-    keys =
+    entity_remap =
     {
-      ks_red  = 50
-      ks_blue = 50
-      ks_yellow = 50
+      k_red    = "ks_red"
+      k_blue   = "ks_blue"
+      k_yellow = "ks_yellow"
     }
 
---May need new themage!!
---Some textures still need to be done for this to work -Chris
     facades =
     {
-      STONEW1 = 30
-      STWALL = 20
-      SMSTONE6 = 10
+      SMSTONE6 = 30
+      STONEW1  = 20
+      STWALL   = 20
+      CAVERN1  = 10
+
+      BIGBRIK1 = 30
+      BSTONE2  = 20
+      BRICK4   = 10
+    }
+
+    prefab_remap =
+    {
+      DOORBLU  = "DOORBLU2"
+      DOORRED  = "DOORRED2"
+      DOORYEL  = "DOORYEL2"
+
+      SILVER3  = "MURAL1"
+      GATE3    = "FLAT22"
+      GATE4    = "FLAT22"
+      REDWALL  = "DOKGRIR"
+      SW1COMP  = "SW1CMT"
+    }
+
+    window_groups =
+    {
+      round  = 90
+      barred = 60
+      grate  = 30
     }
 
     outdoor_torches =
@@ -206,11 +232,6 @@ TNT.THEMES =
       green_torch = 50
       red_torch = 50
       candelabra = 20
-    }
-
-    base_skin =
-    {
-      big_door = "METALDR"
     }
 
 --Mostly based on what is seen in TNT.WAD MAP31
@@ -234,51 +255,53 @@ TNT.ROOM_THEMES =
 {
   egypt_Tomb =
   {
-    env = "building"
+    env  = "building"
+    prob = 50
 
     walls =
     {
       STWALL  = 30
-      BIGWALL = 10
-      STONEW1 = 10
-      STONEW5 = 5
+      BIGWALL = 20
+      STONEW1 = 20
+      STONEW5 = 10
+      LONGWALL = 5
+
+      BRICK7   = 30
+      BRICK4   = 20
+      BRICK5   = 10
     }
 
     floors =
     {
-      FLAT5 = 20
+      RROCK14  = 20
+      FLAT1_2  = 20
       FLOOR5_4 = 20
-      FLOOR5_3 = 15
-      RROCK09 = 15
-      FLAT1_1 = 10
-      FLAT1_2 = 10
+      MFLR8_1  = 20
+
+      FLAT5_5 = 10
+      RROCK12 = 10
       FLAT8   = 10
-      FLAT5_5 = 5
+      SLIME13 = 10
     }
 
     ceilings =
     {
-      FLAT8   = 20
-      FLAT1_1 = 20
-      RROCK09 = 15
+      FLAT8    = 20
+      FLAT1_1  = 20
+      FLOOR6_2 = 20
+
       RROCK11 = 10
       RROCK12 = 10
       RROCK15 = 10
       CEIL1_1 = 5
-    }
-
-    corners =
-    {
-      MURAL1 = 15
-      MURAL2 = 15
-      STONEW5 = 3
     }
   }
 
 
   egypt_Hallway =
   {
-    env = "hallway"
+    env  = "hallway"
+    prob = 50
 
     walls =
     {
@@ -313,43 +336,55 @@ TNT.ROOM_THEMES =
 
   egypt_Outdoors =
   {
-    env = "outdoors"
+    env  = "outdoor"
+    prob = 50
 
     floors =
     {
-      RROCK09 = 50
+      RROCK09 = 30
       RROCK16 = 30
-      RROCK03 = 15
+      RROCK13 = 20
+      RROCK04 = 20
+      MFLR8_3 = 20
+      RROCK03 = 10
+      RROCK19 = 10
     }
 
     naturals =
     {
-      STONEW1 = 50
-      SMSTONE6 = 25
+      ROCK3 = 25
       ROCK4 = 25
       ROCK5 = 25
-      STONE6 = 15
     }
   }
 
+
   egypt_Cave =
   {
-    env = "cave"
+    env  = "cave"
+    prob = 50
 
-    naturals =
+    walls =
     {
--- these do not tile well vertically
---    CAVERN6 = 50
---    CAVERN7 = 50
-
-      ALTAQUA = 50
-
-      ROCK4 = 30
-      ROCK5 = 30
-      TANROCK4 = 30
-      TANROCK5 = 30
+      ALTAQUA  = 20
       ASHWALL7 = 20
-      BROWNHUG = 10
+      TANROCK7 = 20
+      TANROCK8 = 20
+
+      ROCK4   = 20
+      BSTONE1 = 20
+      STONE6  = 20
+    }
+
+    floors =
+    {
+      BSTONE1 = 20
+      FLAT10  = 20
+      STONE4  = 20
+
+      SP_ROCK1 = 20 -- MFLR8_3
+      RROCK18  = 20
+      ASHWALL2 = 10
     }
   }
 }
@@ -365,6 +400,8 @@ TNT.EPISODES =
     sky_patch3 = "DOWDAY"
     sky_patch4 = "DOSDAY"
     dark_prob = 10
+    bex_mid_name = "T1TEXT"
+    bex_end_name = "T2TEXT"
   }
 
   episode2 =
@@ -375,6 +412,7 @@ TNT.EPISODES =
     sky_patch3 = "DOWNITE"
     sky_patch4 = "DOSNITE"
     dark_prob = 80
+    bex_end_name = "T3TEXT"
   }
 
   episode3 =
@@ -385,6 +423,7 @@ TNT.EPISODES =
     sky_patch3 = "DOWHELL"
     sky_patch4 = "DOSHELL"
     dark_prob = 10
+    bex_end_name = "T4TEXT"
   }
 }
 
@@ -415,5 +454,6 @@ OB_THEMES["egypt"] =
   priority = 3
   name_class = "GOTHIC"
   mixed_prob = 5
+  bit_limited = true
 }
 

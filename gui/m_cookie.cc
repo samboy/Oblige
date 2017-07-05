@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2016 Andrew Apted
+//  Copyright (C) 2006-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -70,10 +70,6 @@ static void Cookie_SetValue(const char *name, const char *value)
 		const char *module = active_module.c_str();
 
 		ob_set_mod_option(module, name, value);
-
-		if (main_win)
-			main_win->mod_box->ParseOptValue(module, name, value);
-
 		return;
 	}
 
@@ -93,43 +89,6 @@ static void Cookie_SetValue(const char *name, const char *value)
 	}
 
 
-	if (main_win)
-	{
-		// -- Game Settings --
-		if (main_win->game_box->ParseValue(name, value))
-			return;
-
-		// -- Level Architecture --
-		if (main_win->level_box->ParseValue(name, value))
-			return;
-
-		// -- Playing Style --
-		if (main_win->play_box->ParseValue(name, value))
-			return;
-	}
-
-
-	// old style module syntax (for compatibility)
-	const char *option = strchr(name, '.');
-
-	if (option)
-	{
-		char *module = StringDup(name);
-		module[option - name] = 0;
-
-		option++;
-
-		ob_set_mod_option(module, option, value);
-
-		if (main_win)
-			main_win->mod_box->ParseOptValue(module, option, value);
-
-		StringFree(module);
-		return;
-	}
-
-
-	// everything else goes to the script
 	ob_set_config(name, value);
 }
 
@@ -234,14 +193,14 @@ bool Cookie_Load(const char *filename)
 }
 
 
-bool Cookie_LoadString(const char *str)
+bool Cookie_LoadString(const char *str, bool _keep_seed)
 {
 	context = CCTX_Load;
-	keep_seed = false;
+	keep_seed = _keep_seed;
 
 	active_module.clear();
 
-	LogPrintf("Reading Config (from manager)...\n");
+	LogPrintf("Reading config data...\n");
 
 	// simple line-by-line parser
 	char buffer[MSG_BUF_LEN];
@@ -273,13 +232,13 @@ bool Cookie_Save(const char *filename)
 
 	// header...
 	fprintf(cookie_fp, "-- CONFIG FILE : OBLIGE %s\n", OBLIGE_VERSION); 
-	fprintf(cookie_fp, "-- " OBLIGE_TITLE " (C) 2006-2016 Andrew Apted\n");
+	fprintf(cookie_fp, "-- " OBLIGE_TITLE " (C) 2006-2017 Andrew Apted\n");
 	fprintf(cookie_fp, "-- http://oblige.sourceforge.net/\n\n");
 
 	// settings...
 	std::vector<std::string> lines;
 
-	ob_read_all_config(&lines);
+	ob_read_all_config(&lines, true /* need_full */);
 
 	for (unsigned int i = 0 ; i < lines.size() ; i++)
 	{
@@ -308,6 +267,12 @@ void Cookie_ParseArguments(void)
 
 		if (arg[0] == '{' || arg[0] == '}')
 			continue;
+
+		if (strcmp(arg, "@@") == 0)
+		{
+			active_module.clear();
+			continue;
+		}
 
 		// support an isolated "=", like in: FOO = 3
 		if (i+2 < arg_count &&
@@ -526,7 +491,8 @@ void Recent_AddFile(int group, const char *filename)
 	}
 
 	// push to disk now -- why wait?
-	Options_Save(options_file);
+	if (! batch_mode)
+		Options_Save(options_file);
 }
 
 
@@ -546,7 +512,8 @@ void Recent_RemoveFile(int group, const char *filename)
 	}
 
 	// push to disk now -- why wait?
-	Options_Save(options_file);
+	if (! batch_mode)
+		Options_Save(options_file);
 }
 
 

@@ -1,10 +1,10 @@
 //----------------------------------------------------------------
-//  Setup screen
+//  Game Panel
 //----------------------------------------------------------------
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2016 Andrew Apted
+//  Copyright (C) 2006-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -35,34 +35,28 @@
 UI_Game::UI_Game(int X, int Y, int W, int H, const char *label) :
 	Fl_Group(X, Y, W, H, label)
 {
-	end(); // cancel begin() in Fl_Group constructor
-
-	box(FL_THIN_UP_BOX);
-
-	if (! alternate_look)
-		color(BUILD_BG, BUILD_BG);
+	box(FL_FLAT_BOX);
 
 
-	int y_step = kf_h(6) + KF;
+	int y_step  = kf_h(30);
+	int y_step2 = kf_h(44);
 
-	int cx = X + W * 0.36;
-	int cy = Y + y_step;
+	int cx = X + W * 0.39;
+	int cy = Y + kf_h(4);
 
 
 	const char *heading_text = _("Game Settings");
 
-	Fl_Box *heading = new Fl_Box(FL_NO_BOX, X + kf_w(6), cy, W - kf_w(12), kf_h(24), heading_text);
+	Fl_Box *heading = new Fl_Box(FL_NO_BOX, X + kf_w(8), cy, W - kf_w(12), kf_h(24), heading_text);
 	heading->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
 	heading->labeltype(FL_NORMAL_LABEL);
 	heading->labelfont(FL_HELVETICA_BOLD);
 	heading->labelsize(header_font_size);
 
-	add(heading);
-
-	cy += heading->h() + y_step;
+	cy = Y + kf_h(32);
 
 
-	int cw = W * 0.61;
+	int cw = W * 0.58;
 	int ch = kf_h(24);
 
 	game = new UI_RChoice(cx, cy, cw, ch, _("Game: "));
@@ -70,9 +64,7 @@ UI_Game::UI_Game(int X, int Y, int W, int H, const char *label) :
 	game->selection_color(FL_BLUE);
 	game->callback(callback_Game, this);
 
-	add(game);
-
-	cy += game->h() + y_step;
+	cy += y_step;
 
 
 	engine = new UI_RChoice(cx, cy, cw, ch, _("Engine: "));
@@ -80,21 +72,7 @@ UI_Game::UI_Game(int X, int Y, int W, int H, const char *label) :
 	engine->selection_color(FL_BLUE);
 	engine->callback(callback_Engine, this);
 
-	add(engine);
-
-	cy += engine->h() + y_step * 2;
-
-
-	mode = new UI_RChoice(cx, cy, cw, ch, _("Mode: "));
-	mode->align(FL_ALIGN_LEFT);
-	mode->selection_color(FL_BLUE);
-	mode->callback(callback_Mode, this);
-
-	setup_Mode();
-
-	add(mode);
-
-	cy += mode->h() + y_step;
+	cy += y_step2;
 
 
 	length = new UI_RChoice(cx, cy, cw, ch, _("Length: "));
@@ -102,17 +80,20 @@ UI_Game::UI_Game(int X, int Y, int W, int H, const char *label) :
 	length->selection_color(FL_BLUE);
 	length->callback(callback_Length, this);
 
-	setup_Length();
+	cy += y_step2;
 
-	add(length);
 
-	cy += length->h() + y_step;
+	theme = new UI_RChoice(cx, cy, cw, ch, _("Theme: "));
+	theme->align(FL_ALIGN_LEFT);
+	theme->selection_color(FL_BLUE);
+	theme->callback(callback_Theme, this);
 
+	cy += y_step;
+
+
+	end();
 
 	resizable(NULL);  // don't resize our children
-
-
-	length->SetID("episode");
 }
 
 
@@ -128,16 +109,6 @@ void UI_Game::callback_Game(Fl_Widget *w, void *data)
 	UI_Game *that = (UI_Game *)data;
 
 	ob_set_config("game", that->game->GetID());
-	Signal_Raise("game");
-}
-
-
-void UI_Game::callback_Mode(Fl_Widget *w, void *data)
-{
-	UI_Game *that = (UI_Game *)data;
-
-	ob_set_config("mode", that->mode->GetID());
-	Signal_Raise("mode");
 }
 
 
@@ -146,7 +117,6 @@ void UI_Game::callback_Engine(Fl_Widget *w, void *data)
 	UI_Game *that = (UI_Game *)data;
 
 	ob_set_config("engine", that->engine->GetID());
-	Signal_Raise("engine");
 }
 
 
@@ -158,98 +128,111 @@ void UI_Game::callback_Length(Fl_Widget *w, void *data)
 }
 
 
+void UI_Game::callback_Theme(Fl_Widget *w, void *data)
+{
+	UI_Game *that = (UI_Game *) data;
+
+	ob_set_config("theme", that->theme->GetID());
+}
+
+
 void UI_Game::Locked(bool value)
 {
 	if (value)
 	{
-		game->deactivate();
-		mode->deactivate();
-		length->deactivate();
+		game  ->deactivate();
 		engine->deactivate();
+		length->deactivate();
+		theme ->deactivate();
 	}
 	else
 	{
-		game->activate();
-		mode->activate();
-		length->activate();
+		game  ->activate();
 		engine->activate();
-
-		// ????    game_callback(this, this);
-		// ????    mode_callback(this, this);
+		length->activate();
+		theme ->activate();
 	}
 }
 
 
-void UI_Game::Defaults()
+bool UI_Game::AddChoice(const char *button, const char *id, const char *label)
 {
-	// Note: game, engine are handled by LUA code (ob_init)
-
-	ParseValue("mode", "sp");
-	ParseValue("length", "game");
-}
-
-
-bool UI_Game::ParseValue(const char *key, const char *value)
-{
-	// Note: game, engine are handled by LUA code
-	//
-	if (StringCaseCmp(key, "mode") == 0)
+	if (StringCaseCmp(button, "game") == 0)
 	{
-		mode->SetID(value);
-		callback_Mode(NULL, this);
+		game->AddChoice(id, label);
+		return true;
+	}
+	if (StringCaseCmp(button, "engine") == 0)
+	{
+		engine->AddChoice(id, label);
+		return true;
+	}
+	if (StringCaseCmp(button, "length") == 0)
+	{
+		length->AddChoice(id, label);
+		return true;
+	}
+	if (StringCaseCmp(button, "theme") == 0)
+	{
+		theme->AddChoice(id, label);
 		return true;
 	}
 
-	if (StringCaseCmp(key, "length") == 0)
-	{
-		length->SetID(value);
-		callback_Length(NULL, this);
-	}
-
-	return false;
+	return false;  // unknown button
 }
 
 
-//----------------------------------------------------------------
-
-const char * UI_Game::mode_syms[] =
+bool UI_Game::EnableChoice(const char *button, const char *id, bool enable_it)
 {
-	"sp",   N_("Single Player"),
-	"coop", N_("Co-op"),
-///	"dm",   N_("Deathmatch"),
-///	"ctf",  N_("Capture Flag"),
-
-	NULL, NULL
-};
-
-const char * UI_Game::length_syms[] =
-{
-	"single",  N_("Single Level"),
-	"few",     N_("A Few Maps"),
-	"episode", N_("One Episode"),
-	"game",    N_("Full Game"),
-
-	NULL, NULL
-};
-
-
-void UI_Game::setup_Mode()
-{
-	for (int i = 0; mode_syms[i]; i += 2)
+	if (StringCaseCmp(button, "game") == 0)
 	{
-		mode->AddPair(mode_syms[i], _(mode_syms[i+1]));
-		mode->ShowOrHide(mode_syms[i], 1);
+		game->EnableChoice(id, enable_it);
+		return true;
 	}
+	if (StringCaseCmp(button, "engine") == 0)
+	{
+		engine->EnableChoice(id, enable_it);
+		return true;
+	}
+	if (StringCaseCmp(button, "length") == 0)
+	{
+		length->EnableChoice(id, enable_it);
+		return true;
+	}
+	if (StringCaseCmp(button, "theme") == 0)
+	{
+		theme->EnableChoice(id, enable_it);
+		return true;
+	}
+
+	return false;  // unknown button
 }
 
 
-void UI_Game::setup_Length()
+bool UI_Game::SetButton(const char *button, const char *id)
 {
-	for (int i = 0; length_syms[i]; i += 2)
+	if (StringCaseCmp(button, "game") == 0)
 	{
-		length->AddPair(length_syms[i], _(length_syms[i+1]));
-		length->ShowOrHide(length_syms[i], 1);
+		game->ChangeTo(id);
+		return true;
 	}
+	if (StringCaseCmp(button, "engine") == 0)
+	{
+		engine->ChangeTo(id);
+		return true;
+	}
+	if (StringCaseCmp(button, "length") == 0)
+	{
+		length->ChangeTo(id);
+		return true;
+	}
+	if (StringCaseCmp(button, "theme") == 0)
+	{
+		theme->ChangeTo(id);
+		return true;
+	}
+
+	return false;  // unknown button
 }
 
 

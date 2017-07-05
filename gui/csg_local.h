@@ -100,8 +100,6 @@ public:
 
 	std::vector<gap_c *> gaps;
 
-	csg_brush_c *liquid;
-
 	double mid_x, mid_y;
 
 	// this forms a bounding box (dist from the mid point)
@@ -138,6 +136,10 @@ public:
 
 	bool isClosed() const;
 
+	// these use mid-point of region to compute Z for a brush top/bottom
+	double TopZ   (csg_brush_c *B) const;
+	double BottomZ(csg_brush_c *B) const;
+
 	void GetBounds(double *x1, double *y1, double *x2, double *y2) const;
 
 	bool ContainsPoint(double x, double y) const;
@@ -170,6 +172,9 @@ public:
 	bool reachable;
 
 	std::vector<gap_c *> neighbors;
+
+	// liquid brush whose surface is in this gap (or clipped above it)
+	csg_brush_c *liquid;
 
 public:
 	gap_c(csg_brush_c *B, csg_brush_c *T);

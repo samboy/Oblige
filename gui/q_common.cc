@@ -1,10 +1,10 @@
 //------------------------------------------------------------------------
-//  BSP files - Quake I and II
+//  BSP files - Quake I, II and III
 //------------------------------------------------------------------------
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2014 Andrew Apted
+//  Copyright (C) 2006-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -27,6 +27,7 @@
 #include "lib_file.h"
 #include "lib_util.h"
 #include "lib_pak.h"
+#include "lib_zip.h"
 
 #include "main.h"
 #include "m_lua.h"
@@ -103,6 +104,12 @@ void qLump_c::Prepend(const void *data, u32_t len)
 		memmove(& buffer[len], & buffer[0], old_size);
 	}
 	memcpy(& buffer[0], data, len);
+}
+
+
+void qLump_c::AddByte(byte value)
+{
+	Append(&value, 1);
 }
 
 
@@ -218,6 +225,14 @@ static u16_t AddRawPlane(const dplane_t *plane, bool *was_new)
 
 	memcpy(&raw_plane, plane, sizeof(dplane_t));
 
+	// never use negative zero (minus zero) in normals
+	// [ this prevents duplicate planes ]
+	if (raw_plane.normal[0] == -0.0f) raw_plane.normal[0] = +0.0f;
+	if (raw_plane.normal[1] == -0.0f) raw_plane.normal[1] = +0.0f;
+	if (raw_plane.normal[2] == -0.0f) raw_plane.normal[2] = +0.0f;
+
+	if (raw_plane.dist == -0.0f) raw_plane.dist = +0.0f;
+
 
 	int hash = I_ROUND(raw_plane.dist * 1.1);
 
@@ -262,8 +277,15 @@ static u16_t AddRawPlane(const dplane_t *plane, bool *was_new)
 
 	hashtab->push_back(new_index);
 
-//  fprintf(stderr, "ADDED PLANE (idx %d), count %d\n",
-//                   (int)plane_idx, (int)bsp_planes.size());
+#if 0  // DEBUG
+fprintf(stderr, "ADDED PLANE #%d : %08x %08x %08x d:%08x tp:%08x\n",
+(int)new_index,
+*(u32_t *) &raw_plane.normal[0],
+*(u32_t *) &raw_plane.normal[1],
+*(u32_t *) &raw_plane.normal[2],
+*(u32_t *) &raw_plane.dist,
+(u32_t)     raw_plane.type);
+#endif
 
 	*was_new = true;
 
@@ -294,8 +316,8 @@ u16_t BSP_AddPlane(float x, float y, float z,
 
 	// flip plane to make major axis positive
 	if ( (-nx >= MAX(ay, az)) ||
-			(-ny >= MAX(ax, az)) ||
-			(-nz >= MAX(ax, ay)) )
+		 (-ny >= MAX(ax, az)) ||
+		 (-nz >= MAX(ax, ay)) )
 	{
 		did_flip = true;
 
@@ -338,7 +360,7 @@ u16_t BSP_AddPlane(float x, float y, float z,
 
 	// Quake2/3 have pairs of planes (opposite directions)
 
-	if (was_new && (qk_game == 2 || qk_sub_format == SUBFMT_HalfLife))
+	if (was_new && (qk_game >= 2 || qk_sub_format == SUBFMT_HalfLife))
 	{
 		raw_plane.normal[0] = -nx;
 		raw_plane.normal[1] = -ny;
@@ -367,13 +389,30 @@ u16_t BSP_AddPlane(const quake_plane_c *P, bool *flip_var)
 
 void BSP_WritePlanes(int lump_num, int max_planes)
 {
-	if ((int)bsp_planes.size() >= max_planes)
-		Main_FatalError("Quake build failure: exceeded limit of %d PLANES\n",
-				max_planes);
-
 	qLump_c *lump = BSP_NewLump(lump_num);
 
-	lump->Append(&bsp_planes[0], bsp_planes.size() * sizeof(dplane_t));
+	if (qk_game != 3)
+	{
+		lump->Append(&bsp_planes[0], bsp_planes.size() * sizeof(dplane_t));
+	}
+	else  // Quake 3 has simpler structure
+	{
+		for (unsigned int i = 0 ; i < bsp_planes.size() ; i++)
+		{
+			dplane3_t pl;
+
+			pl.normal[0] = bsp_planes[i].normal[0];
+			pl.normal[1] = bsp_planes[i].normal[1];
+			pl.normal[2] = bsp_planes[i].normal[2];
+			pl.dist      = bsp_planes[i].dist;
+
+			lump->Append(&pl, sizeof(pl));
+		}
+	}
+
+	if (lump->GetSize() >= max_planes)
+		Main_FatalError("Quake build failure: exceeded limit of %d PLANES\n",
+				max_planes);
 
 	BSP_ClearPlanes();
 }
@@ -586,6 +625,14 @@ static void BSP_WriteLump(qLump_c *lump)
 	if (len == 0)
 		return;
 
+	if (qk_game == 3)
+	{
+		ZIPF_AppendData(lump->GetBuffer(), len);
+
+		// no need for padding in PK3 files
+		return;
+	}
+
 	PAK_AppendData(lump->GetBuffer(), len);
 
 	// pad lumps to a multiple of four bytes
@@ -607,7 +654,10 @@ bool BSP_OpenLevel(const char *entry_in_pak)
 	// assumes that PAK_OpenWrite() has already been called.
 
 	// begin the .BSP file
-	PAK_NewLump(entry_in_pak);
+	if (qk_game == 3)
+		ZIPF_NewLump(entry_in_pak);
+	else
+		PAK_NewLump(entry_in_pak);
 
 	switch (qk_game)
 	{
@@ -624,6 +674,11 @@ bool BSP_OpenLevel(const char *entry_in_pak)
 			bsp_numlumps = Q2_HEADER_LUMPS;
 			break;
 
+		case 3:
+			bsp_version  = Q3_BSP_VERSION;
+			bsp_numlumps = Q3_HEADER_LUMPS;
+			break;
+
 		default:
 			Main_FatalError("INTERNAL ERROR: invalid qk_game %d\n", qk_game);
 			return false; // NOT REACHED
@@ -635,7 +690,7 @@ bool BSP_OpenLevel(const char *entry_in_pak)
 	BSP_PrepareVertices();
 	BSP_PrepareEdges();
 
-	QCOM_FreeLightmaps();
+	QLIT_FreeLightmaps();
 
 	return true;
 }
@@ -650,9 +705,19 @@ static void BSP_WriteHeader()
 		PAK_AppendData(Q2_IDENT_MAGIC, 4);
 		offset += 4;
 	}
+	else if (qk_game == 3)
+	{
+		ZIPF_AppendData(Q3_IDENT_MAGIC, 4);
+		offset += 4;
+	}
 
 	s32_t raw_version = LE_S32(bsp_version);
-	PAK_AppendData(&raw_version, 4);
+
+	if (qk_game == 3)
+		ZIPF_AppendData(&raw_version, 4);
+	else
+		PAK_AppendData(&raw_version, 4);
+
 	offset += 4;
 
 	offset += sizeof(lump_t) * bsp_numlumps;
@@ -670,10 +735,33 @@ static void BSP_WriteHeader()
 		raw_info.start  = LE_U32(offset);
 		raw_info.length = LE_U32(length);
 
-		PAK_AppendData(&raw_info, sizeof(raw_info));
+		if (qk_game == 3)
+		{
+			ZIPF_AppendData(&raw_info, sizeof(raw_info));
 
-		offset += (u32_t)ALIGN_LEN(length);
+			offset += (u32_t)length;
+		}
+		else
+		{
+			PAK_AppendData(&raw_info, sizeof(raw_info));
+
+			offset += (u32_t)ALIGN_LEN(length);
+		}
 	}
+}
+
+
+static csg_entity_c *FindObligeWorldspawn()
+{
+	for (unsigned int k = 0 ; k < all_entities.size() ; k++)
+	{
+		csg_entity_c *E = all_entities[k];
+
+		if (strcmp(E->id.c_str(), "oblige_worldspawn") == 0)
+			return E;
+	}
+
+	return NULL;
 }
 
 
@@ -685,19 +773,13 @@ void BSP_WriteEntities(int lump_num, const char *description)
 
 	lump->Printf("{\n");
 
-	// !!!! FIXME : let Lua code supply all these values
+	if (qk_game >= 3)
+		lump->KeyPair("_generated_by", "OBLIGE " OBLIGE_VERSION);
+	else if (description)
+		lump->KeyPair("message", description);
 
-	if (qk_sub_format == SUBFMT_HalfLife)
-	{
-		lump->KeyPair("wad", "\\sierra\\half-life\\valve\\halflife.wad;");
-		lump->KeyPair("mapversion", "220");
-		lump->KeyPair("MaxRange", "4096");
-		lump->KeyPair("sounds", "1");
-	}
-
-//  lump->KeyPair("_generator", "OBLIGE " OBLIGE_VERSION " (c) Andrew Apted");
-//  lump->KeyPair("_homepage", "http://oblige.sourceforge.net");
-
+	// TODO : do this via oblige_worldspawn entity
+	if (qk_game == 1)
 	{
 		char buffer[80];
 		sprintf(buffer, "%d", qk_worldtype);
@@ -705,10 +787,27 @@ void BSP_WriteEntities(int lump_num, const char *description)
 		lump->KeyPair("worldtype", buffer);
 	}
 
-	if (description)
-		lump->KeyPair("message", description);
-	else
-		lump->KeyPair("message", "Oblige Level");
+#if 0  // REMOVE THIS, let Lua code supply these values
+	if (qk_sub_format == SUBFMT_HalfLife)
+	{
+		lump->KeyPair("wad", "\\sierra\\half-life\\valve\\halflife.wad;");
+		lump->KeyPair("mapversion", "220");
+		lump->KeyPair("MaxRange", "4096");
+		lump->KeyPair("sounds", "1");
+	}
+#endif
+
+	csg_entity_c *ob_world = FindObligeWorldspawn();
+
+	csg_property_set_c::iterator PI;
+
+	if (ob_world)
+	{
+		for (PI = ob_world->props.begin() ; PI != ob_world->props.end() ; PI++)
+		{
+			lump->KeyPair(PI->first.c_str(), "%s", PI->second.c_str());
+		}
+	}
 
 	lump->KeyPair("classname", "worldspawn");
 
@@ -722,16 +821,22 @@ void BSP_WriteEntities(int lump_num, const char *description)
 
 		const char *name = E->id.c_str();
 
+		// this is mainly to skip broken map-models
+		if (strcmp(name, "nothing") == 0)
+			continue;
+
 		// skip special (Oblige only) entities
 		if (strncmp(name, "oblige_", 7) == 0)
+			continue;
+
+		// skip light entities for Quake3
+		if (qk_game == 3 && strcmp(name, "light") == 0)
 			continue;
 
 		lump->Printf("{\n");
 
 		// write entity properties
-		csg_property_set_c::iterator PI;
-
-		for (PI = E->props.begin(); PI != E->props.end(); PI++)
+		for (PI = E->props.begin() ; PI != E->props.end() ; PI++)
 		{
 			lump->KeyPair(PI->first.c_str(), "%s", PI->second.c_str());
 		}
@@ -765,13 +870,16 @@ bool BSP_CloseLevel()
 	}
 
 	// finish the .BSP file
-	PAK_FinishLump();
+	if (qk_game == 3)
+		ZIPF_FinishLump();
+	else
+		PAK_FinishLump();
 
 	// free all the memory
 	BSP_ClearLumps();
 
-	QCOM_FreeLightmaps();
-	QCOM_FreeClusters();
+	QLIT_FreeLightmaps();
+	QVIS_FreeClusters();
 
 	return true;
 }
@@ -798,15 +906,15 @@ qLump_c * BSP_CreateInfoLump()
 
 	L->Printf("\n");
 	L->Printf("-- Levels created by OBLIGE %s\n", OBLIGE_VERSION);
-	L->Printf("-- " OBLIGE_TITLE " (C) 2006-2015 Andrew Apted\n");
+	L->Printf("-- " OBLIGE_TITLE " (C) 2006-2017 Andrew Apted\n");
 	L->Printf("-- http://oblige.sourceforge.net/\n");
 	L->Printf("\n");
 
 	std::vector<std::string> lines;
 
-	ob_read_all_config(&lines);
+	ob_read_all_config(&lines, false /* need_full */);
 
-	for (unsigned int i = 0; i < lines.size(); i++)
+	for (unsigned int i = 0 ; i < lines.size() ; i++)
 		L->Printf("%s\n", lines[i].c_str());
 
 	L->Printf("\n\n\n");
@@ -824,9 +932,18 @@ void BSP_AddInfoFile()
 {
 	qLump_c *info = BSP_CreateInfoLump();
 
-	PAK_NewLump("oblige_dat.txt");
-	BSP_WriteLump(info);
-	PAK_FinishLump();
+	if (qk_game == 3)
+	{
+		ZIPF_NewLump("oblige_dat.txt");
+		BSP_WriteLump(info);
+		ZIPF_FinishLump();
+	}
+	else
+	{
+		PAK_NewLump("oblige_dat.txt");
+		BSP_WriteLump(info);
+		PAK_FinishLump();
+	}
 
 	delete info;
 }

@@ -1,24 +1,21 @@
 
-OBLIGE 7.37
+OBLIGE 7.55
 ===========
 
-by Andrew Apted.  May 2016
+by Andrew Apted.
 
 
 INTRODUCTION
 
-  OBLIGE is a random level generator for various classic FPS
-  games, such as DOOM II and QUAKE (with more in development).
+  OBLIGE is a random level generator for the classic FPS 'DOOM'.
   The goal is to produce good levels which are fun to play.
 
-  The planned features are:
+  Features of OBLIGE include:
 
     * high quality levels, e.g. outdoor areas and caves!
-    * easy to use GUI interface
+    * easy to use GUI interface (no messing with command lines)
     * built-in node builder, so the levels are ready to play
     * uses the LUA scripting language for easy customisation
-    * DOOM, Heretic, Hexen and Quake support!
-
 
   Please visit the web site for complete information:
 
@@ -55,7 +52,7 @@ COPYRIGHT and LICENSE
 
   OBLIGE Level Maker
 
-  Copyright (C) 2006-2016 Andrew Apted, et al
+  Copyright (C) 2006-2017 Andrew Apted, et al
 
   OBLIGE is free software; you can redistribute it and/or modify
   it under the terms of the GNU General Public License as published

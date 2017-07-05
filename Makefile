@@ -21,7 +21,7 @@ CXX=g++
 
 OBJ_DIR=obj_linux
 
-OPTIMISE=-O2
+OPTIMISE=-O0 -g3
 
 # operating system choices: UNIX WIN32
 OS=UNIX
@@ -81,6 +81,7 @@ OBJS=	$(OBJ_DIR)/main.o      \
 	$(OBJ_DIR)/g_nukem.o   \
 	$(OBJ_DIR)/g_quake.o   \
 	$(OBJ_DIR)/g_quake2.o  \
+	$(OBJ_DIR)/g_quake3.o  \
 	$(OBJ_DIR)/g_wolf.o    \
 	$(OBJ_DIR)/q_common.o  \
 	$(OBJ_DIR)/q_light.o   \
@@ -94,11 +95,9 @@ OBJS=	$(OBJ_DIR)/main.o      \
 	$(OBJ_DIR)/ui_build.o  \
 	$(OBJ_DIR)/ui_game.o   \
 	$(OBJ_DIR)/ui_hyper.o  \
-	$(OBJ_DIR)/ui_level.o  \
 	$(OBJ_DIR)/ui_map.o    \
 	$(OBJ_DIR)/ui_module.o \
 	$(OBJ_DIR)/ui_rchoice.o \
-	$(OBJ_DIR)/ui_play.o   \
 	$(OBJ_DIR)/ui_window.o \
 	\
 	$(OBJ_DIR)/zf_menu.o
@@ -239,17 +238,19 @@ install: stripped
 	install -d $(SCRIPT_DIR)/scripts
 	install -d $(SCRIPT_DIR)/engines
 	install -d $(SCRIPT_DIR)/modules
+	install -d $(SCRIPT_DIR)/addons
+	install -d $(SCRIPT_DIR)/language
 	#
 	install -o root -m 644 scripts/*.lua $(SCRIPT_DIR)/scripts
 	install -o root -m 644 engines/*.lua $(SCRIPT_DIR)/engines
 	install -o root -m 644 modules/*.lua $(SCRIPT_DIR)/modules
+	install -o root -m 644  addons/*.pk3 $(SCRIPT_DIR)/addons
+	install -o root -m 644 language/*.*  $(SCRIPT_DIR)/language
 	#
 	install -d $(SCRIPT_DIR)/data
-	install -d $(SCRIPT_DIR)/data/doom1_boss
-	install -d $(SCRIPT_DIR)/data/doom2_boss
+	install -d $(SCRIPT_DIR)/data/masks
 	install -o root -m 644 data/*.* $(SCRIPT_DIR)/data
-	install -o root -m 644 data/doom1_boss/*.* $(SCRIPT_DIR)/data/doom1_boss
-	install -o root -m 644 data/doom2_boss/*.* $(SCRIPT_DIR)/data/doom2_boss
+	install -o root -m 644 data/masks/*.* $(SCRIPT_DIR)/data/masks
 	#
 	rm -Rf $(SCRIPT_DIR)/games
 	cp -a games $(SCRIPT_DIR)/games

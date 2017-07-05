@@ -4,7 +4,7 @@
 --
 --  Oblige Level Maker
 --
---  Copyright (C) 2015-2016 Andrew Apted
+--  Copyright (C) 2015-2017 Andrew Apted
 --
 --  This program is free software; you can redistribute it and/or
 --  modify it under the terms of the GNU General Public License
@@ -977,9 +977,9 @@ function Title_centered_string(T, mx, my, text, style)
   local thick
 
 
- 
   -- TODO : support "thin_horiz" and "thin_vert" pens
   -- [ not real pens, just use different box_w than box_h ]
+
   -- FIXME : the "slash" pens should adjust box_h too
 
   gui.title_prop("pen_type", T.pen_type or "circle")
@@ -1066,6 +1066,50 @@ function Title_widest_size_to_fit(text, box_w, max_w, spacing)
   end
 
   return 10
+end
+
+
+
+function Title_draw_lit_box(x, y, w, h, hue1, hue2, hue3)
+  if hue2 then
+    gui.title_prop("color", hue2)
+    gui.title_draw_rect(x, y, w, h)
+  end
+
+  gui.title_prop("color", hue3)
+
+  gui.title_draw_rect(x, y, w, 1)
+  gui.title_draw_rect(x, y, 1, h)
+
+  gui.title_prop("color", hue1)
+
+  gui.title_draw_rect(x, y + h - 1, w, 1)
+  gui.title_draw_rect(x + w - 1, y, 1, h)
+end
+
+
+
+function Title_interp_color(list, ity, out)
+  ity = math.clamp(0, ity, 1)
+  ity = ity * (#list - 1)
+
+  for pos = 1, #list - 1 do
+    if ity <= 1 then
+      local A = list[pos]
+      local B = list[pos+1]
+
+      out[1] = A[1] * (1 - ity) + B[1] * ity
+      out[2] = A[2] * (1 - ity) + B[2] * ity
+      out[3] = A[3] * (1 - ity) + B[3] * ity
+      return
+    end
+
+    ity = ity - 1
+  end
+
+  out[1] = list[#list][1]
+  out[2] = list[#list][2]
+  out[3] = list[#list][3]
 end
 
 
@@ -1375,23 +1419,711 @@ TITLE_SUB_STYLES =
 }
 
 
+TITLE_SPACE_STYLES =
+{
+  red_nebula =
+  {
+    hue1   = "#300"
+    hue2   = "#f00"
+    hue3   = "#fff"
+    thresh = 0.5
+  }
+
+  blue_nebula =
+  {
+    hue1   = "#000"
+    hue2   = "#00f"
+    hue3   = "#99f"
+    thresh = 0.5
+  }
+
+  green_nebula =
+  {
+    hue1   = "#000"
+    hue2   = "#363"
+    hue3   = "#6f6"
+    thresh = 0.5
+  }
+
+  brown_nebula =
+  {
+    hue1   = "#000000"
+    hue2   = "#ab6f43"
+    hue3   = "#ffebdf"
+    thresh = 0.25
+    power  = 3.0
+  }
+
+  firey_nebula =
+  {
+    prob = 100
+
+    hue1   = "#300"
+    hue2   = "#732"
+    hue3   = "#ff8"
+    thresh = 0.2
+    power  = 1.5
+  }
+
+  grey_nebula =
+  {
+    prob   = 5
+
+    hue1   = "#000"
+    hue2   = "#aaa"
+    hue3   = "#000"
+    power  = 4
+  }
+
+  purple_nebula =
+  {
+    prob = 5
+
+    hue1   = "#707"
+    hue2   = "#f0f"
+    hue3   = "#fff"
+    thresh = 0.3
+    power  = 2
+  }
+}
+
+
+TITLE_INTERMISSION_STYLES =
+{
+  brown_box =
+  {
+    hue1 = "#332b13"
+    hue2 = "#774f2b"
+    hue3 = "#ab6f43"
+
+    fracdim = 2.8
+  }
+
+  blue_box =
+  {
+    hue1 = "#005"
+    hue2 = "#00c"
+    hue3 = "#33f"
+
+    fracdim = 2.8
+  }
+
+  pink_box =
+  {
+    hue1 = "#600"
+    hue2 = "#933"
+    hue3 = "#b55"
+
+    fracdim = 2.8
+  }
+
+  green_box =
+  {
+    hue1 = "#13230b"
+    hue2 = "#27551b"
+    hue3 = "#448822"
+
+    fracdim = 2.8
+  }
+
+  dark_box =
+  {
+    hue1 = "#111"
+    hue2 = "#222"
+    hue3 = "#333"
+
+    fracdim = 2.9
+  }
+}
+
+
+TITLE_COLOR_RAMPS =
+{
+  white =
+  {
+    { 0,0,0 }
+    { 255,255,255 }
+  }
+
+  light_grey =
+  {
+    { 0,0,0 }
+    { 168,168,168 }
+  }
+
+  mid_grey =
+  {
+    { 0,0,0 }
+    { 128,128,128 }
+  }
+
+  dark_grey =
+  {
+    { 0,0,0 }
+    { 96,96,96 }
+  }
+
+  blue =
+  {
+    { 0,0,0 }
+    { 0,0,255 }
+  }
+
+  blue_white =
+  {
+    { 0,0,0 }
+    { 0,0,255 }
+    { 231,231,255 }
+  }
+
+  red =
+  {
+    { 60,0,0 }
+    { 255,0,0 }
+  }
+
+  red_white =
+  {
+    { 60,0,0 }
+    { 255,0,0 }
+    { 255,224,224 }
+  }
+
+  green =
+  {
+    { 8,23,8 }
+    { 62,147,62 }
+    { 115,255,115 }
+  }
+
+  mid_green =
+  {
+    { 8,23,8 }
+    { 62,147,62 }
+  }
+
+  orange_white =
+  {
+    {43,35,15}
+    {135,40,5}
+    {215,95,11}
+    {243,115,23}
+    {255,235,219}
+  }
+
+  pink =
+  {
+    {60,5,5}
+    {107,15,15}
+    {155,51,51}
+    {203,107,107}
+    {255,183,183}
+  }
+
+  light_brown =
+  {
+    {0,0,0}
+    {75,55,27}
+    {119,79,43}
+    {191,123,75}
+    {255,179,131}
+    {255,235,223}
+  }
+
+  brown_yellow =
+  {
+    {0,0,0}
+    {115,43,0}
+    {255,255,115}
+  }
+}
+
+
 ------------------------------------------------------------------------
 
 
-function Title_add_background()
-  local DIR = "games/" .. assert(GAME.game_dir) .. "/titles"
+TITLE_SEED = 0
 
-  local backgrounds = gui.scan_directory(DIR, "*.tga")
 
-  if not backgrounds or table.empty(backgrounds) then
-    error("Failed to scan 'data/titles' directory")
+function Title_gen_space_scene()
+  --
+  -- generate a night sky scene
+  --
+
+  local style = Title_pick_style(TITLE_SPACE_STYLES, {})
+
+  local density = rand.pick({40,70,100})
+
+  local big_stars = {}
+
+
+  local function distance_to_big_star(mx, my, r, x, y)
+    -- account for the curvey-cross shape of big stars
+    local dx = math.abs(x - mx)
+    local dy = math.abs(y - my)
+
+    if dy >= dx then dx, dy = dy, dx end
+
+    local best_d = 9e9
+
+    for i = 0, 1, 0.05 do
+      local px = i * r
+      local py = (1 - i) * 0.4
+
+      local d = geom.dist(px, py, dx, dy)
+
+      best_d = math.min(best_d, d)
+    end
+
+    return best_d
   end
 
-  local filename = rand.pick(backgrounds)
 
-  gui.printf("Using title background: %s\n", filename)
+  local function nearest_big_star(x, y)
+    -- avoid the logo too
+    local near_d = geom.dist(315, 195, x, y)
 
-  gui.title_load_image(0, 0, DIR .. "/" .. filename)
+    each B in big_stars do
+      local d = distance_to_big_star(B.mx, B.my, B.r, x, y)
+
+      near_d = math.min(near_d, d)
+    end
+
+    return near_d
+  end
+
+
+  local function draw_big_star(mx, my, r)
+    local r2 = int(r * 1.2)
+
+    local DD = 0.09
+
+    for y = my - r,  my + r  do
+    for x = mx - r2, mx + r2 do
+      local dx = (x - mx) / r2
+      local dy = (y - my) / r
+
+      local ity = 1.0 / (math.abs(dx) + DD) + 1.0 / (math.abs(dy) + DD)
+
+      ity = ity / (1.0 / DD)
+      ity = ity ^ 3.2
+      ity = ity * (1.0 - geom.dist(0, 0, dx, dy))
+      ity = 240 * math.clamp(0, ity, 1)
+
+      if ity < 50 then continue end
+
+      gui.title_prop("color", { ity, ity, ity })
+      gui.title_draw_rect(x, y, 1, 1)
+
+    end -- x, y
+    end
+  end
+
+
+  local function location_for_big_star(r)
+    local mx, my
+    local best_d = -1
+
+    for loop = 1, 9 do
+      local tx = rand.irange(r+2, 320 - (r+2))
+      local ty = rand.irange(r+2, 200 - (r+2))
+
+      local d = nearest_big_star(tx, ty)
+
+      if d > best_d then
+        best_d = d
+        mx, my = tx, ty
+      end
+    end
+
+    assert(mx and my)
+
+    return mx, my
+  end
+
+
+  local function add_big_stars()
+    gui.title_prop("render_mode", "additive")
+
+    local BIG_SIZES = { 56, 36, 16 }
+
+    each r in BIG_SIZES do
+      if rand.odds(50) then
+        local mx, my = location_for_big_star(r)
+        table.insert(big_stars, { mx=mx, my=my, r=r })
+        draw_big_star(mx, my, r)
+      end
+    end
+  end
+
+
+  local function draw_small_star(mx, my, size, col)
+    -- determine brightness
+    local ity = rand.pick({64,96,120,144,160,224})
+
+    col[1] = ity
+    col[2] = ity
+    col[3] = ity
+
+    gui.title_prop("color", col)
+
+    if size == 1 then
+      gui.title_draw_rect(mx, my, 1, 1)
+
+    elseif size == 2 then
+      gui.title_draw_rect(mx, my, 2, 2)
+
+    else
+      gui.title_draw_rect(mx, my, 1, 1)
+
+      col[1] = col[1] * 0.6
+      col[2] = col[2] * 0.6
+      col[3] = col[3] * 0.6
+
+      gui.title_prop("color", col)
+
+      gui.title_draw_rect(mx-1, my, 1, 1)
+      gui.title_draw_rect(mx+1, my, 1, 1)
+      gui.title_draw_rect(mx, my-1, 1, 1)
+      gui.title_draw_rect(mx, my+1, 1, 1)
+    end
+  end
+
+
+  local function add_little_stars()
+    gui.title_prop("render_mode", "additive")
+
+    local col = { 0,0,0 }
+
+    for x = 0, 319 do
+      -- begin somewhere off-screen
+      local y = rand.irange(-300, -500)
+
+      while y < 200 do
+        if y >= 0 then
+          local size = 1
+          if rand.odds(15) then size = 3 end
+          if rand.odds(3)  then size = 2 end
+
+          if nearest_big_star(x, y) >= 7 then
+            draw_small_star(x, y, size, col)
+          end
+        end
+
+        y = y + rand.irange(density / 2, density * 2)
+      end
+    end
+  end
+
+
+  gui.title_draw_clouds(TITLE_SEED, style.hue1, style.hue2, style.hue3,
+                        style.thresh or 0, style.power or 1,
+                        style.fracdim or 2.4)
+
+  add_big_stars()
+
+  add_little_stars()
+end
+
+
+
+function Title_gen_ray_burst()
+  local mx, my
+
+  mx = rand.pick({30,270, 160,160})
+  my = rand.pick({-10,160, 80,90,100,100,110,120})
+
+  local step = rand.pick({20,24,30,36})
+
+  local ray_colors =
+  {
+    blue_white = 60
+    blue = 30
+
+    red_white = 30
+    orange_white = 30
+    brown_yellow = 30
+    dark_grey = 30
+
+    red = 10
+    pink = 10
+    light_brown = 10
+  }
+
+  local color_name = rand.key_by_probs(ray_colors)
+
+  local color_list = TITLE_COLOR_RAMPS[color_name]
+  assert(color_list)
+
+
+  local function coord(angle, dist)
+    local x = mx + math.sin(angle * math.pi / 180) * dist * 1.2
+    local y = my + math.cos(angle * math.pi / 180) * dist
+
+    return x, y
+  end
+
+  local function draw_ray(angle, thick, col)
+    local col = { 0,0,0 }
+
+    for side = 0,1 do
+    for m = thick, 0, -0.1 do
+      local da = sel(side > 0, -1, 1) * m
+
+      local x1, y1 = coord(angle + da, 380)
+
+      local ity = 1.0 - m / thick
+
+      ity = (ity ^ 1.4) * 0.8
+
+      Title_interp_color(color_list, ity, col)
+
+      gui.title_prop("color", col)
+      gui.title_draw_line(mx, my, x1, y1, col)
+    end
+    end
+  end
+
+
+  -- draw each ray
+
+  for angle = step/2, 361-step/2, step do
+    draw_ray(angle, step * 0.4, col)
+  end
+end
+
+
+
+function Title_gen_wall_scene()
+  local tex_list
+
+  local lamp_y
+  local lamp_sprite
+
+  if rand.odds(37) then
+    -- tech lamp
+    lamp_y = 154
+    lamp_sprite = "lamp2"
+
+    tex_list = { "airduct", "cement" }
+
+  else
+    if rand.odds(50) then
+      -- standing lamp
+      lamp_y = 130
+      lamp_sprite = "lamp1"
+    else
+      -- wall-mounted torch
+      lamp_y = 80
+      lamp_sprite = "lamp3"
+    end
+
+    tex_list = { "block1", "block2" }
+  end
+
+  -- draw the texture over the whole screen
+  local tex = rand.pick(tex_list)
+  gui.title_prop("texture", "data/bg/" .. tex .. ".tga")
+
+  gui.title_draw_rect(0, 0, 320, 200)
+
+  -- decide # of lamps
+  local lamp_num = 2
+  if rand.odds(25) then lamp_num = 1 end
+  if rand.odds(25) then lamp_num = 3 end
+
+  local lights = {}
+
+  for i = 1, lamp_num do
+    local x = 150
+
+    if lamp_num >= 2 and i == 1 then x = 35 end
+    if lamp_num >= 2 and i == lamp_num then x = 265 end
+
+    table.insert(lights, { x=x, y=lamp_y })
+  end
+
+  -- apply lighting effect
+  gui.title_prop("render_mode", "multiply")
+
+  local col = { 0,0,0 }
+
+  local xf = 1.0
+  if lamp_num == 1 then xf = 0.7 end
+  if lamp_num == 3 then xf = 1.6 end
+
+  for x = 0, 319 do
+  for y = 0, 199  do
+    local d = 9e9
+    each L in lights do
+      d = math.min(d, geom.dist(L.x * xf, L.y, x * xf, y))
+    end
+
+    local ity = math.exp(-d / 50) * 255  --- 255 - (d ^ 1.5) / 2.0
+    ity = math.clamp(0, ity, 255)
+
+    col[1] = ity
+    col[2] = ity
+    col[3] = ity
+
+    gui.title_prop("color", col)
+    gui.title_draw_rect(x, y, 1, 1)
+  end
+  end
+
+  -- draw each lamp
+  each L in lights do
+    gui.title_load_image(L.x - 10, L.y - 16, "data/bg/" .. lamp_sprite .. ".tga")
+  end
+end
+
+
+
+function Title_gen_cave_scene()
+  local sun_x = 2 / (6 ^ 0.5)
+  local sun_y = 1 / (6 ^ 0.5)
+  local sun_z = 1 / (6 ^ 0.5)
+
+  if rand.odds(50) then sun_x = - sun_x end
+
+  local tall_mode = rand.odds(35)
+
+
+  local cave_colors =
+  {
+    light_brown  = 60
+    brown_yellow = 60
+
+    red_white = 30
+    orange_white = 30
+    light_grey = 30
+
+    blue_white = 10
+    pink = 10
+    green = 10
+  }
+
+  local color_name = rand.key_by_probs(cave_colors)
+
+  local color_list = TITLE_COLOR_RAMPS[color_name]
+  assert(color_list)
+
+
+  local function intensity(mx, r, sx, sy)
+    -- compute the normal vector
+    local z = (sy - 99.5) / 99.5
+
+    if tall_mode then z = (sy / 190) ^ 1.4 end
+
+    local x = (sx - mx) / (r + 1)
+    x = x * x * sel(x < 0, -1, 1)
+
+    local y = math.sqrt(1 - x*x)
+
+    -- normalize
+    local len = math.sqrt(x*x + y*y + z*z)
+
+    x = x / len
+    y = y / len
+    z = z / len
+
+    return x * sun_x + y * sun_y + z * sun_z;
+  end
+
+
+  local function draw_cone(mx, dist)
+    local col = { 0,0,0 }
+
+    local dist_factor = 1.4 / (1 + math.log(dist + 0.5))
+
+    for y = 0, 199 do
+      -- calc radius at this point
+      local r = math.abs(y - 99.5)
+      r = 3 + r ^ 1.6 / 24
+
+      if (dist < 5) then
+        r = r + (5 - dist)
+      end
+
+      if tall_mode then
+        r = (y - (dist-1)*3) * 0.5
+        if r < 0 then continue end
+
+        r = 1.2 + r ^ 2.2 / 240
+      end
+
+      for x = mx - r, mx + r do
+        local ity = intensity(mx, r, x, y)
+
+        ity = math.clamp(0, ity, 1) ^ 0.7
+        ity = ity * dist_factor
+
+        Title_interp_color(color_list, ity, col)
+
+        gui.title_prop("color", col)
+        gui.title_draw_rect(x, y, 1, 1)
+      end
+    end
+  end
+
+
+  -- cave scene --
+
+  if rand.odds(50) and not tall_mode then
+    gui.title_prop("color", "#ffa")
+    gui.title_draw_rect(0,0, 320,200)
+  end
+
+
+  for dist = 30, 1, -1 do
+    local mx = rand.irange(5, 315)
+
+    draw_cone(mx, dist)
+  end
+end
+
+
+
+function Title_gen_tunnel_scene()
+  local mx = 60
+  local my = 60
+
+  local x_mul = 0.75
+  local y_mul = 0.25
+
+  if rand.odds(50) then
+    mx = 320 - mx
+    x_mul = 1.0 - x_mul
+  end
+
+
+  local tunnel_colors =
+  {
+    blue_white   = 30
+    red_white    = 20
+    brown_yellow = 10
+    mid_green    = 10
+    mid_grey     = 10
+  }
+
+  local color_name = rand.key_by_probs(tunnel_colors)
+
+  local color_list = TITLE_COLOR_RAMPS[color_name]
+  assert(color_list)
+
+  local col = { 0,0,0 }
+
+  for r = 1202, 2, -2 do
+    local bump = (gui.random() ^ 10) * 0.7
+    local ity = math.clamp(0.0, r / 1200, 0.9) + bump
+
+    ity = ity * (1.0 - r / 900)
+
+    Title_interp_color(color_list, ity, col)
+
+    gui.title_prop("color", col)
+    gui.title_draw_disc(mx - r*x_mul, my - r*y_mul, r*1.2, r)
+  end
 end
 
 
@@ -1486,6 +2218,7 @@ end
 
 
 function Title_add_title()
+  gui.title_prop("reset", "all")
 
   -- determine if we have one or two main lines
   local line1, line2, mid_line, top_line = Title_split_into_lines()
@@ -1501,7 +2234,7 @@ function Title_add_title()
 
   local bottom_line
 
-  if rand.odds(56) then
+  if rand.odds(33) then
     if #GAME.sub_title <= 4 and string.upper(GAME.sub_title) == GAME.sub_title then
       -- this will be part of main title (a "version" string)
       bottom_line = GAME.sub_title
@@ -1603,7 +2336,7 @@ stderrf("font sizes: %d x %d  |  %d x %d  |  %d x %d\n", w1,h1, w2,h2, w3,h3)
 --]]
 
 
-  -- FIXME !!! find a good naming scheme for the title parts
+  -- TODO: find a good naming scheme for these title parts
 
 
   -- decide geometry for major parts --
@@ -1716,6 +2449,7 @@ end
 
 
 function Title_add_credit()
+  gui.title_prop("reset", "all")
   gui.title_prop("color", "#000")
 
   gui.title_draw_rect(310, 190, 10, 10)
@@ -1725,7 +2459,7 @@ end
 
 
 
-function process_raw_fonts()
+function Title_process_raw_fonts()
   local function dump_line(...)
     -- gui.debugf(...)
   end
@@ -1774,27 +2508,84 @@ end
 
 
 
+function Title_make_interpic()
+  gui.title_create(320, 200, "#000")
+  gui.title_set_palette(GAME.PALETTES.normal)
+
+  local style = Title_pick_style(TITLE_INTERMISSION_STYLES, {})
+
+  gui.title_draw_clouds(TITLE_SEED, style.hue1, style.hue2, style.hue3,
+                        style.thresh or 0, style.power or 1,
+                        style.fracdim or 2.4)
+
+  local BW = 32
+  local BH = 25
+
+  local bricky = rand.odds(30)
+
+  for bx = 0, 10 do
+  for by = 0, 8 do
+    local ofs = 0
+
+    if bricky then ofs = (by % 2) * (BW / 2) end
+
+    Title_draw_lit_box(bx*BW - ofs, by*BH, BW, BH,
+                       style.hue1, nil, style.hue3)
+  end
+  end
+
+  local format = "patch"
+  if PARAM.tga_images then format = "tga" end
+
+  gui.title_write("INTERPIC", format)
+  gui.title_free()
+end
+
+
+
+function Title_add_background()
+  if rand.odds(12) then
+    Title_gen_ray_burst()
+  elseif rand.odds(12) then
+    Title_gen_tunnel_scene()
+  elseif rand.odds(6) then
+    Title_gen_cave_scene()
+  elseif rand.odds(35) then
+    Title_gen_wall_scene()
+  else
+    Title_gen_space_scene()
+  end
+end
+
+
+
+function Title_make_titlepic()
+  gui.title_create(320, 200, "#000")
+  gui.title_set_palette(GAME.PALETTES.normal)
+
+  Title_add_background()
+  Title_add_credit()
+  Title_add_title()
+
+  local format = "patch"
+  if PARAM.tga_images then format = "tga" end
+
+  gui.title_write("TITLEPIC", format)
+  gui.title_free()
+end
+
+
+
 function Title_generate()
   assert(GAME.title)
   assert(GAME.PALETTES)
   assert(GAME.PALETTES.normal)
 
-  process_raw_fonts()
+  Title_process_raw_fonts()
 
+  TITLE_SEED = int(gui.random() * 1000000)
 
-  gui.title_create(320, 200, "#000")
-
-  gui.title_set_palette(GAME.PALETTES.normal)
-
-  Title_add_background()
-
-  gui.title_write("INTERPIC")
-
-  Title_add_credit()
-  Title_add_title()
-
-  gui.title_write("TITLEPIC")
-
-  gui.title_free()
+  Title_make_interpic()
+  Title_make_titlepic()
 end
 

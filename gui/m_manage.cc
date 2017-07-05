@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2014-2016 Andrew Apted
+//  Copyright (C) 2014-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -329,12 +329,12 @@ public:
 		Clear();
 
 		text_buf->append("-- CONFIG FILE : OBLIGE " OBLIGE_VERSION "\n"); 
-		text_buf->append("-- " OBLIGE_TITLE " (C) 2006-2015 Andrew Apted\n");
+		text_buf->append("-- " OBLIGE_TITLE " (C) 2006-2017 Andrew Apted\n");
 		text_buf->append("-- http://oblige.sourceforge.net/\n\n");
 
 		std::vector<std::string> lines;
 
-		ob_read_all_config(&lines);
+		ob_read_all_config(&lines, false /* need_full */);
 
 		for (unsigned int i = 0 ; i < lines.size() ; i++)
 		{
@@ -657,7 +657,7 @@ private:
 
 		const char *str = that->text_buf->text();
 
-		Cookie_LoadString(str);
+		Cookie_LoadString(str, true /* keep_seed */);
 
 		free((void*)str);
 	}
@@ -743,7 +743,7 @@ UI_Manage_Config::UI_Manage_Config(int W, int H, const char *label) :
 	conf_disp->align(Fl_Align(FL_ALIGN_TOP));
 	conf_disp->buffer(text_buf);
 	conf_disp->textfont(FL_COURIER);
-	conf_disp->textsize(12 + KF * 2);
+	conf_disp->textsize(small_font_size);
 
 
 	/* Main Buttons */
@@ -865,7 +865,7 @@ void DLG_ManageConfig(void)
 	config_window->SetupRecent();
 	config_window->ReadCurrentSettings();
 
-	// run the GUI until the user closes
+	// run the window until the user closes it
 	while (! config_window->WantQuit())
 		Fl::wait();
 

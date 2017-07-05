@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2009 Andrew Apted
+//  Copyright (C) 2006-2016 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -23,9 +23,19 @@
 
 class UI_Build : public Fl_Group
 {
+public:
+	UI_MiniMap *mini_map;
+
 private:
+	Fl_Menu_Across *misc_menu;
+
+	Fl_Button *build;
+	Fl_Button *quit;
+
 	Fl_Box *status;
 	Fl_Progress *progress;
+
+	Fl_Box *seed_display;
 
 	char  status_label[200];
 	char  prog_label[100];
@@ -39,14 +49,6 @@ private:
 
 	std::vector<std::string> step_names;
 
-	Fl_Menu_Across *misc_menu;
-
-	Fl_Button *build;
-	Fl_Button *quit;
-
-public:
-	UI_MiniMap *mini_map;
-
 public:
 	UI_Build(int x, int y, int w, int h, const char *label = NULL);
 	virtual ~UI_Build();
@@ -59,6 +61,8 @@ public:
 	void Prog_Finish();
 
 	void SetStatus(const char *msg);
+	void DisplaySeed(double value);
+
 	void SetAbortButton(bool abort);
 	void Locked(bool value);
 
@@ -76,6 +80,7 @@ private:
 	static void menu_do_options(Fl_Widget *, void*);
 	static void menu_do_addons(Fl_Widget *, void*);
 	static void menu_do_edit_seed(Fl_Widget *, void*);
+	static void menu_do_view_logs(Fl_Widget *, void*);
 	static void menu_do_manage_config(Fl_Widget *, void*);
 };
 

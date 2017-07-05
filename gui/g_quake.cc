@@ -699,7 +699,7 @@ static void Q1_WriteFace(quake_face_c *face)
 
 	if (face->lmap)
 	{
-		raw_face.lightofs = face->lmap->CalcOffset();
+		raw_face.lightofs = face->lmap->offset;
 
 		for (int n = 0 ; n < 4 ; n++)
 			raw_face.styles[n] = face->lmap->styles[n];
@@ -716,7 +716,7 @@ static void Q1_WriteFace(quake_face_c *face)
 		flags |= TEX_SPECIAL;
 	}
 
-	raw_face.texinfo = Q1_AddTexInfo(texture, flags, face->s, face->t);
+	raw_face.texinfo = Q1_AddTexInfo(texture, flags, face->uv_mat.s, face->uv_mat.t);
 
 
 	DoWriteFace(raw_face);
@@ -1149,7 +1149,7 @@ static void MapModel_Face(quake_mapmodel_c *model, int face, s16_t plane, bool f
 	raw_face.styles[2] = 0xFF;
 	raw_face.styles[3] = 0xFF;
 
-	raw_face.lightofs = QCOM_FlatLightOffset(MODEL_LIGHT);
+	raw_face.lightofs = 0;  // a shared lightmap at very start
 
 
 	DoWriteFace(raw_face);
@@ -1292,14 +1292,14 @@ static void Q1_LightWorld()
 	if (main_win)
 		main_win->build_box->Prog_Step("Light");
 
-	QCOM_LightAllFaces();
+	QLIT_LightAllFaces();
 
 	int max_size = MAX_MAP_LIGHTING;
 
 	if (qk_sub_format == SUBFMT_HalfLife)
 		max_size = HL_MAX_MAP_LIGHTING;
 
-	QCOM_BuildLightingLump(LUMP_LIGHTING, max_size);
+	QLIT_BuildLightingLump(LUMP_LIGHTING, max_size);
 }
 
 
@@ -1317,16 +1317,16 @@ static void Q1_VisWorld(int base_leafs)
 		numleafs += 6; ///TODO  qk_all_mapmodels->PredictLeafs();
 	}
 
-	QCOM_Visibility(LUMP_VISIBILITY, MAX_MAP_VISIBILITY, numleafs);
+	QVIS_Visibility(LUMP_VISIBILITY, MAX_MAP_VISIBILITY, numleafs);
 }
 
 
 static void Q1_CreateBSPFile(const char *name)
 {
-	qk_color_lighting = false;
+	q_mono_lighting = true;
 
 	if (qk_sub_format == SUBFMT_HalfLife)
-		qk_color_lighting = true;
+		q_mono_lighting = false;
 
 	BSP_OpenLevel(name);
 
@@ -1437,7 +1437,10 @@ bool quake1_game_interface_c::Start()
 {
 	qk_game = 1;
 	qk_sub_format = 0;
-	qk_lighting_quality = fast_lighting ? -1 : +1;
+
+	CLUSTER_SIZE = 128.0;
+
+	QLIT_InitProperties();
 
 	if (batch_mode)
 		filename = StringDup(batch_output_file);
@@ -1518,15 +1521,6 @@ void quake1_game_interface_c::Property(const char *key, const char *value)
 		// this assumes the sub_format is only set once at the start
 		if (main_win)
 			main_win->build_box->Prog_Init(0, StepsForGame(qk_sub_format));
-	}
-	else if (StringCaseCmp(key, "lighting_quality") == 0)
-	{
-		if (StringCaseCmp(value, "low") == 0)
-			qk_lighting_quality = -1;
-		else if (StringCaseCmp(value, "high") == 0)
-			qk_lighting_quality = +1;
-		else
-			qk_lighting_quality = 0;
 	}
 	else if (StringCaseCmp(key, "worldtype") == 0)
 	{

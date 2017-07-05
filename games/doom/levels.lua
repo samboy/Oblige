@@ -33,6 +33,8 @@ DOOM.EPISODES =
     theme = "tech"
     sky_patch = "RSKY1"
     dark_prob = 10
+    bex_mid_name = "C1TEXT"
+    bex_end_name = "C2TEXT"
   }
 
   episode2 =
@@ -42,6 +44,7 @@ DOOM.EPISODES =
     theme = "urban"
     sky_patch = "RSKY2"
     dark_prob = 40
+    bex_end_name = "C3TEXT"
   }
 
   episode3 =
@@ -51,20 +54,13 @@ DOOM.EPISODES =
     theme = "hell"
     sky_patch = "RSKY3"
     dark_prob = 10
+    bex_end_name = "C4TEXT"
   }
 }
 
 
 DOOM.PREBUILT_LEVELS =
 {
-  MAP07 =
-  {
-    { prob=50, file="games/doom/data/boss2/simple1.wad", map="MAP07" }
-    { prob=50, file="games/doom/data/boss2/simple2.wad", map="MAP07" }
-    { prob=50, file="games/doom/data/boss2/simple3.wad", map="MAP07" }
-    { prob=50, file="games/doom/data/boss2/simple4.wad", map="MAP07" }
-  }
-
   MAP30 =
   {
     { prob=50, file="games/doom/data/boss2/icon1.wad", map="MAP30" }
@@ -72,21 +68,6 @@ DOOM.PREBUILT_LEVELS =
     { prob=50, file="games/doom/data/boss2/icon3.wad", map="MAP01" }
     { prob=50, file="games/doom/data/boss2/icon3.wad", map="MAP02" }
     { prob=50, file="games/doom/data/boss2/icon3.wad", map="MAP03" }
-  }
-
-  -- these two are currently disabled
-  GOTCHA =
-  {
-    { prob=50, file="games/doom/data/boss2/gotcha1.wad", map="MAP01" }
-    { prob=50, file="games/doom/data/boss2/gotcha2.wad", map="MAP01" }
-    { prob=40, file="games/doom/data/boss2/gotcha3.wad", map="MAP01" }
-    { prob=20, file="games/doom/data/boss2/gotcha4.wad", map="MAP01" }
-  }
-
-  GALLOW =
-  {
-    { prob=50, file="games/doom/data/boss2/gallow1.wad", map="MAP01" }
-    { prob=25, file="games/doom/data/boss2/gallow2.wad", map="MAP01" }
   }
 }
 
@@ -98,9 +79,6 @@ function DOOM.get_levels()
   local MAP_LEN_TAB = { few=4, episode=11, game=32 }
 
   local MAP_NUM = MAP_LEN_TAB[OB_CONFIG.length] or 1
-
-  gotcha_map = rand.pick({ 17,18,19 })
-  gallow_map = rand.pick({ 24,25,26 })
 
   local EP_NUM = 1
   if MAP_NUM > 11 then EP_NUM = 2 end
@@ -139,8 +117,8 @@ function DOOM.get_levels()
     end
 
     if OB_CONFIG.length == "single" then
-      game_along = rand.pick({ 0.2, 0.3, 0.4, 0.7 })
-      ep_along = game_along
+      game_along = 0.57
+      ep_along   = 0.75
 
     elseif OB_CONFIG.length == "few" then
       ep_along = game_along
@@ -171,6 +149,13 @@ function DOOM.get_levels()
     -- secret levels
     if map == 31 or map == 32 then
       LEV.is_secret = true
+
+      -- TODO : a more generic mechanism
+      if OB_CONFIG.game == "tnt" and
+        (OB_CONFIG.theme == "original" or OB_CONFIG.theme == "mostly_original")
+      then
+        LEV.theme_name = "egypt"
+      end
     end
 
     if map == 23 then

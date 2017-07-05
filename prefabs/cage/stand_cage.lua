@@ -2,19 +2,38 @@
 -- Standing Cage
 --
 
-PREFABS.Cage_standing1 =
+PREFABS.Cage_stand1 =
 {
   file   = "cage/stand_cage.wad"
-  where  = "seeds"
-  shape  = "P"
+  map    = "MAP01"
 
-  seed_w = 1
-  seed_h = 1
+  prob   = 500
 
-  x_fit = { 56,72 }
-  y_fit = { 56,72 }
+  where  = "point"
+
+  size   = 128
+  height = 128
 
   bound_z1 = 0
   bound_z2 = 120
+}
+
+
+PREFABS.Cage_stand2 =
+{
+  file   = "cage/stand_cage.wad"
+  map    = "MAP02"
+
+  rank   = 2
+  prob   = 100
+  env    = "cave"
+
+  where  = "point"
+
+  size   = 96
+  height = 152
+
+  bound_z1 = 0
+  bound_z2 = 152
 }
 

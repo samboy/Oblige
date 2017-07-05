@@ -2,7 +2,7 @@
 --  DOOM 1 / ULTIMATE DOOM
 --------------------------------------------------------------------
 --
---  Copyright (C) 2006-2016 Andrew Apted
+--  Copyright (C) 2006-2017 Andrew Apted
 --  Copyright (C) 2011,2014 Chris Pisarczyk
 --
 --  This program is free software; you can redistribute it and/or
@@ -142,8 +142,9 @@ ULTDOOM.MATERIALS =
   NUKAGE1  = { t="SLADRIP1", f="NUKAGE1", sane=1 }
 
 
+  --------------------------------------------------------------------
   --
-  -- Compatibility stuff
+  -- Compatibility section
   --
   -- These allow prefabs containing DOOM 2 specific flats or textures
   -- to at least work in DOOM / Ultimate DOOM (a bit mucked up though).
@@ -280,7 +281,7 @@ ULTDOOM.MATERIALS =
   ROCK5    = { t="SP_ROCK1", f="MFLR8_3" }
 
   SILVER1  = { t="SHAWN2",   f="FLAT23" }
-  SILVER2  = { t="SHAWN2",   f="FLAT23" }
+  SILVER2  = { t="COMPUTE1", f="FLAT23" }
   SILVER3  = { t="PLANET1",  f="FLAT23" }
   SPACEW2  = { t="TEKWALL4", f="CEIL5_1" }
   SPACEW3  = { t="COMPUTE1", f="FLAT1" }
@@ -360,6 +361,8 @@ ULTDOOM.MATERIALS =
   ZIMMER7  = { t="ASHWALL",  f="FLOOR6_2" }
   ZIMMER8  = { t="SP_ROCK1", f="MFLR8_3" }
 
+  ZZZFACE4 = { t="MARBFACE", f="DEM1_5" }
+
   -- rails
   MIDBARS1 = { t="MIDGRATE", rail_h=128 }
   MIDBRONZ = { t="MIDGRATE", rail_h=128 }
@@ -394,6 +397,27 @@ ULTDOOM.MONSTERS =
 }
 
 
+ULTDOOM.ENTITIES =
+{
+  -- compatible replacements for things lacking in DOOM 1 / Ultimate DOOM
+
+  mercury_lamp  = { id=2028, r=16, h=48 }
+  mercury_small = { id=2028, r=16, h=48 }
+
+  gutted_victim1 = { id=59, r=20, h=84, ceil=true, pass=true }
+  gutted_victim2 = { id=61, r=20, h=52, ceil=true, pass=true }
+
+  gutted_torso1  = { id=59, r=20, h=84, ceil=true, pass=true }
+  gutted_torso2  = { id=61, r=20, h=52, ceil=true, pass=true }
+  gutted_torso3  = { id=63, r=20, h=68, ceil=true, pass=true }
+  gutted_torso4  = { id=63, r=20, h=68, ceil=true, pass=true }
+
+  pool_blood_1  = { id=24, r=20, h=16, pass=true }
+  pool_blood_2  = { id=24, r=20, h=16, pass=true }
+  pool_brains   = { id=10, r=20, h=16, pass=true }
+}
+
+
 --------------------------------------------------------------------
 
 --Fixed up for future use in V6 -Chris
@@ -404,18 +428,65 @@ ULTDOOM.THEMES =
   {
     keys =
     {
-      kc_red    = 50
-      kc_blue   = 50
-      kc_yellow = 50
+      k_red    = 50
+      k_blue   = 50
+      k_yellow = 50
     }
 
-    switches = { sw_blue=50 }
+    window_groups =
+    {
+      square = 90
+      tall   = 30
+      grate  = 10
+    }
+
+    narrow_halls =
+    {
+      vent = 50
+    }
+
+    wide_halls =
+    {
+      deuce = 50
+    }
+
+    barrels =
+    {
+      barrel = 50
+    }
+
+    passable_decor =
+    {
+      gibs = 40
+
+      gibbed_player = 10
+      dead_player = 10
+      dead_zombie = 3
+      dead_shooter = 3
+      dead_imp = 3
+      dead_demon = 1
+      dead_caco  = 1
+    }
 
     cave_torches =
     {
       red_torch   = 60
       green_torch = 40
       blue_torch  = 20
+    }
+
+    cliff_trees =
+    {
+      burnt_tree = 80
+      brown_stub = 40
+        big_tree = 20
+    }
+
+    park_decor =
+    {
+      burnt_tree = 80
+      brown_stub = 40
+        big_tree = 20
     }
 
     fences =
@@ -436,6 +507,17 @@ ULTDOOM.THEMES =
       GRAYVINE = 60
     }
 
+    cage_mats =
+    {
+      METAL1   = 60
+      BROWN144 = 60
+      ICKWALL3 = 60
+
+      STONE    = 20
+      SLADWALL = 20
+      WOOD1    = 20
+    }
+
     wall_groups =
     {
       PLAIN = 100
@@ -451,9 +533,9 @@ ULTDOOM.THEMES =
   {
     liquids =
     {
-      nukage = 90
-      water = 15
-      lava = 10
+      nukage = 80
+      water  = 20
+      lava   = 10
     }
 
     facades =
@@ -474,17 +556,36 @@ ULTDOOM.THEMES =
       SP_ROCK1 = 20
     }
 
+    prefab_remap =
+    {
+    }
+
+    floor_sinks =
+    {
+      PLAIN = 200
+      liquid_plain = 10
+      liquid_shiny = 5
+      liquid_metal = 5
+      floor_green = 10
+      floor_blue2 = 5
+    }
+
+    ceiling_sinks =
+    {
+      PLAIN = 90
+      sky_shiny = 20
+      sky_metal = 10
+      light_red_shiny = 20
+      light_orange_shiny = 7
+      light_brightred_metal = 7
+    }
+
     wall_groups =
     {
       PLAIN = 70
       low_gap = 50
       mid_band = 25
       lite2 = 15
-    }
-
-    base_skin =
-    {
-      big_door = "BIGDOOR2"
     }
 
     style_list =
@@ -503,8 +604,8 @@ ULTDOOM.THEMES =
     liquids =
     {
       nukage = 60
-      blood = 20
-      water = 10
+      blood  = 20
+      water  = 10
     }
 
     -- Best facades would be STONE/2/3, BROVINE/2, BROWN1 and maybe a few others as I have not seen many
@@ -527,9 +628,34 @@ ULTDOOM.THEMES =
       GRAYVINE = 20
     }
 
-    base_skin =
+    prefab_remap =
     {
-      big_door = "BIGDOOR2"
+    }
+
+    floor_sinks =
+    {
+      PLAIN = 200
+      liquid_plain = 10
+      liquid_shiny = 5
+      liquid_metal = 5
+      floor_green = 10
+      floor_blue2 = 5
+    }
+
+    ceiling_sinks =
+    {
+      PLAIN = 90
+      sky_shiny = 20
+      sky_metal = 10
+      light_red_shiny = 20
+      light_orange_shiny = 7
+      light_brightred_metal = 7
+    }
+
+    wall_groups =
+    {
+      -- TODO : appropriate wall detail for Deimos
+      PLAIN = 100
     }
 
     style_list =
@@ -547,17 +673,17 @@ ULTDOOM.THEMES =
 
     liquids =
     {
-      lava = 30
-      blood = 90
+      lava   = 90
+      blood  = 30
+      water  = 10
       nukage = 5
-      water = 10
     }
 
-    keys =
+    entity_remap =
     {
-      ks_red = 50
-      ks_blue = 50
-      ks_yellow = 50
+      k_red    = "ks_red"
+      k_blue   = "ks_blue"
+      k_yellow = "ks_yellow"
     }
 
     facades =
@@ -584,8 +710,62 @@ ULTDOOM.THEMES =
       GRAYVINE = 20
     }
 
-    base_skin =
+    prefab_remap =
     {
+      DOORBLU  = "DOORBLU2"
+      DOORRED  = "DOORRED2"
+      DOORYEL  = "DOORYEL2"
+
+      BIGDOOR1 = "BIGDOOR6"
+      BIGDOOR2 = "BIGDOOR7"
+      BIGDOOR3 = "BIGDOOR7"
+      BIGDOOR4 = "BIGDOOR5"
+
+      SW1COMP  = "SW1LION"
+      SW1PIPE  = "SW1BROWN"
+      SILVER3  = "MARBFACE"
+    }
+
+    floor_sinks =
+    {
+      PLAIN = 120
+      liquid_plain = 10
+      liquid_blood = 10
+      floor_skulls = 20
+      floor_glowingrock = 10
+      floor_snakes = 5
+    }
+
+    ceiling_sinks =
+    {
+      PLAIN = 50
+      sky_metal = 20
+      sky_plain = 20
+      light_diamond = 10
+      light_hell_red = 20
+      light_hell_lava = 5
+      ceil_redash = 5
+    }
+
+    wall_groups =
+    {
+      PLAIN = 80
+      torches1 = 40
+      torches2 = 15
+      low_gap = 20
+      runes1 = 7
+      runes2 = 7
+      runes3 = 7
+      cross1 = 7
+      cross2 = 15
+    }
+
+    window_groups =
+    {
+      round  = 80
+      barred = 40
+      tall   = 20
+      grate  = 10
     }
 
     monster_prefs =
@@ -608,17 +788,17 @@ ULTDOOM.THEMES =
   {
     liquids =
     {
-      lava = 30
-      blood = 50
+      blood  = 60
+      lava   = 30
+      water  = 20
       nukage = 10
-      water = 20
     }
 
-    keys =
+    entity_remap =
     {
-      ks_red = 50
-      ks_blue = 50
-      ks_yellow = 50
+      k_red    = "ks_red"
+      k_blue   = "ks_blue"
+      k_yellow = "ks_yellow"
     }
 
     facades =
@@ -644,8 +824,54 @@ ULTDOOM.THEMES =
       GRAYVINE = 20
     }
 
-    base_skin =
+    prefab_remap =
     {
+      DOORBLU  = "DOORBLU2"
+      DOORRED  = "DOORRED2"
+      DOORYEL  = "DOORYEL2"
+
+      BIGDOOR1 = "BIGDOOR6"
+      BIGDOOR2 = "BIGDOOR7"
+      BIGDOOR3 = "BIGDOOR7"
+      BIGDOOR4 = "BIGDOOR5"
+
+      SW1COMP  = "SW1GARG"
+      SW1PIPE  = "SW1BROWN"
+      SILVER3  = "STONGARG"
+    }
+
+    floor_sinks =
+    {
+      PLAIN = 120
+      liquid_plain = 10
+      liquid_blood = 10
+      floor_skulls = 20
+      floor_glowingrock = 10
+      floor_snakes = 5
+    }
+
+    ceiling_sinks =
+    {
+      PLAIN = 50
+      sky_metal = 20
+      sky_plain = 20
+      light_diamond = 10
+      light_hell_red = 20
+      light_hell_lava = 5
+      ceil_redash = 5
+    }
+
+    wall_groups =
+    {
+      PLAIN = 80
+      torches1 = 40
+      torches2 = 15
+      low_gap = 20
+      runes1 = 7
+      runes2 = 7
+      runes3 = 7
+      cross1 = 7
+      cross2 = 15
     }
 
     monster_prefs =
@@ -662,26 +888,54 @@ ULTDOOM.THEMES =
 
 ULTDOOM.ROOM_THEMES =
 {
-  -- this field ensures these theme entries REPLACE those of Doom 2.
+  -- this ensures the following room themes REPLACE those of Doom 2.
   replace_all = true
 
 
-  any_Stairwell =
+-----  GENERIC STUFF  ------------------------------
+
+  any_vent_Hallway =
   {
-    env = "stairwell"
+    env   = "hallway"
+    group = "vent"
+    prob  = 50
 
     walls =
     {
-      BROWN1  = 50
-      GRAY1   = 50
-      STARGR1 = 50
-      METAL1  = 20
+      GRAY1 = 50
     }
 
     floors =
     {
       FLAT1 = 30
-      FLOOR7_1 = 50
+    }
+
+    ceilings =
+    {
+      CEIL3_5 = 30
+    }
+  }
+
+
+  any_deuce_Hallway =
+  {
+    env   = "hallway"
+    group = "deuce"
+    prob  = 1
+
+    walls =
+    {
+      GRAY1 = 50
+    }
+
+    floors =
+    {
+      FLAT1 = 30
+    }
+
+    ceilings =
+    {
+      CEIL3_5 = 30
     }
   }
 
@@ -690,7 +944,8 @@ ULTDOOM.ROOM_THEMES =
 
   tech_Room =
   {
-    env = "building"
+    env  = "building"
+    prob = 50
 
     walls =
     {
@@ -744,7 +999,8 @@ ULTDOOM.ROOM_THEMES =
 
   tech_Brown =
   {
-    env = "building"
+    env  = "building"
+    prob = 50
 
     walls =
     {
@@ -806,12 +1062,20 @@ ULTDOOM.ROOM_THEMES =
       CEIL5_1 = 20
     }
 
-
     ceilings =
     {
       CEIL5_1 = 50
       CEIL4_1 = 15
       CEIL4_2 = 15
+    }
+
+    wall_groups =
+    {
+      PLAIN = 90
+      mid_band = 25
+      mid_band2 = 10
+      lite1 = 5
+      lite2 = 15
     }
   }
 
@@ -879,7 +1143,9 @@ ULTDOOM.ROOM_THEMES =
 
   tech_Hallway =
   {
-    env = "hallway"
+    env   = "hallway"
+    group = "deuce"
+    prob  = 50
 
     walls =
     {
@@ -932,9 +1198,18 @@ ULTDOOM.ROOM_THEMES =
 
   tech_Cave =
   {
-    env = "cave"
+    env  = "cave"
+    prob = 50
 
-    naturals =
+    walls =
+    {
+      ASHWALL = 30
+      SP_ROCK1 = 60
+      GRAYVINE = 20
+      TEKWALL4 = 3
+    }
+
+    floors =
     {
       ASHWALL = 30
       SP_ROCK1 = 60
@@ -946,7 +1221,8 @@ ULTDOOM.ROOM_THEMES =
 
   tech_Outdoors =
   {
-    env = "outdoors"
+    env = "outdoor"
+    prob = 50
 
     floors =
     {
@@ -972,6 +1248,7 @@ ULTDOOM.ROOM_THEMES =
   deimos_Room =
   {
     env = "building"
+    prob = 50
 
     walls =
     {
@@ -1044,6 +1321,7 @@ ULTDOOM.ROOM_THEMES =
   deimos_Hellish =
   {
     env = "building"
+    prob = 50
 
     walls =
     {
@@ -1131,7 +1409,9 @@ ULTDOOM.ROOM_THEMES =
 
   deimos_Hallway =
   {
-    env = "hallway"
+    env   = "hallway"
+    group = "deuce"
+    prob  = 50
 
     walls =
     {
@@ -1194,7 +1474,9 @@ ULTDOOM.ROOM_THEMES =
 
   deimos_Hallway_hell =
   {
-    env = "hallway"
+    env   = "hallway"
+    group = "deuce"
+    prob  = 50
 
     walls =
     {
@@ -1252,9 +1534,18 @@ ULTDOOM.ROOM_THEMES =
 
   deimos_Cave =
   {
-    env = "cave"
+    env  = "cave"
+    prob = 50
 
-    naturals =
+    walls =
+    {
+      SP_ROCK1 = 90
+      ASHWALL = 20
+      BROWNHUG = 15
+      GRAYVINE = 10
+    }
+
+    floors =
     {
       SP_ROCK1 = 90
       ASHWALL = 20
@@ -1266,18 +1557,19 @@ ULTDOOM.ROOM_THEMES =
 
   deimos_Outdoors =
   {
-    env = "outdoors"
+    env = "outdoor"
+    prob = 50
 
 --Makes sense for high prob for SP_ROCK1 because the intermission screen shows
 --Deimos has a desolate, gray ground.
-    floors = 
-    { 
+    floors =
+    {
       BROWN144 = 30
       BROWN1 = 10
-      STONE = 10 
+      STONE = 10
     }
 
-    naturals = 
+    naturals =
     { 
       SP_ROCK1 = 60
       ASHWALL = 2
@@ -1333,12 +1625,6 @@ ULTDOOM.ROOM_THEMES =
       FLAT5_1 = 5
       FLAT5_2 = 5
       CEIL1_1 = 5
-    }
-
-    corners =
-    {
-      SKULWALL = 8
-      SKULWAL3 = 7
     }
   }
 
@@ -1453,37 +1739,28 @@ ULTDOOM.ROOM_THEMES =
       FLAT5_2 = 5
       CEIL1_1 = 5
     }
-
-    corners =
-    {
-      SKULWALL = 10
-      SKULWAL3 = 10
-      REDWALL1 = 15
-    }
   }
 
 
   hell_Hallway =
   {
-    env = "hallway"
+    env   = "hallway"
+    group = "deuce"
+    prob  = 50
 
     walls =
     {
-      BROWN1 = 33
-      BROWNGRN = 50
-      BROVINE = 20
-      BROVINE2 = 15
-      GRAY1 = 50
-      GRAY5 = 33
-      ICKWALL1 = 30
-      ICKWALL3 = 30
-      STONE2 = 40
-      STONE3 = 50
-      METAL1 = 30
+      FIREBLU2 = 50
+      FIREWALL = 50
+      SKSPINE2 = 50
+      SKIN2    = 50
+      SKINSYMB = 50
+      MARBGRAY = 50
     }
 
     floors =
     {
+      BLOOD1 = 50
       FLAT4 = 30
       CEIL4_1 = 15
       CEIL5_1 = 30
@@ -1499,6 +1776,8 @@ ULTDOOM.ROOM_THEMES =
 
     ceilings =
     {
+      BLOOD1 = 50
+      LAVA1 = 20
       FLAT4 = 20
       CEIL4_2 = 15
       CEIL5_1 = 30
@@ -1509,12 +1788,20 @@ ULTDOOM.ROOM_THEMES =
       FLAT5_1 = 2
       DEM1_6 = 2
     }
+
+    y_offsets =
+    {
+      SKSPINE2 = 13
+      SKINSYMB = 30
+      MARBGRAY = 24
+    }
   }
 
 
   hell_Outdoors =
   {
-    env = "outdoors"
+    env = "outdoor"
+    prob = 50
 
     floors =
     {
@@ -1544,7 +1831,8 @@ ULTDOOM.ROOM_THEMES =
 
   hell_Outdoors_hot =
   {
-    env = "outdoors"
+    env = "outdoor"
+    prob = 50
 
     floors =
     {
@@ -1576,9 +1864,22 @@ ULTDOOM.ROOM_THEMES =
 
   hell_Cave =
   {
-    env = "cave"
+    env  = "cave"
+    prob = 50
 
-    naturals =
+    walls =
+    {
+      ROCKRED1 = 90
+      SKIN2 = 30
+      SKINFACE = 25
+      SKSNAKE1 = 35
+      SKSNAKE2 = 35
+      FIREBLU1 = 50
+      FIRELAVA = 50
+      ASHWALL  = 20
+    }
+
+    floors =
     {
       ROCKRED1 = 90
       SKIN2 = 30
@@ -1722,7 +2023,9 @@ ULTDOOM.ROOM_THEMES =
 
   flesh_Hallway_hell =
   {
-    env = "hallway"
+    env   = "hallway"
+    group = "deuce"
+    prob  = 50
 
     walls =
     {
@@ -1781,8 +2084,22 @@ ULTDOOM.ROOM_THEMES =
   flesh_Cave =
   {
     env = "cave"
+    prob = 50
 
-    naturals =
+    walls =
+    {
+      ROCKRED1 = 70
+      SP_ROCK1 = 50
+      BROWNHUG = 15
+      SKIN2 = 10
+      SKINFACE = 20
+      SKSNAKE1 = 5
+      SKSNAKE2 = 5
+      FIREBLU1 = 10
+      FIRELAVA = 10
+    }
+
+    floors =
     {
       ROCKRED1 = 70
       SP_ROCK1 = 50
@@ -1799,7 +2116,8 @@ ULTDOOM.ROOM_THEMES =
 
   flesh_Outdoors =
   {
-    env = "outdoors"
+    env = "outdoor"
+    prob = 50
 
     floors =
     {
@@ -1849,6 +2167,7 @@ ULTDOOM.EPISODES =
 
     name_patch = "M_EPI1"
     description = "Knee-Deep in the Dead"
+    bex_end_name = "E1TEXT"
   }
 
   episode2 =
@@ -1861,6 +2180,7 @@ ULTDOOM.EPISODES =
 
     name_patch = "M_EPI2"
     description = "The Shores of Hell"
+    bex_end_name = "E2TEXT"
   }
 
   episode3 =
@@ -1873,6 +2193,7 @@ ULTDOOM.EPISODES =
 
     name_patch = "M_EPI3"
     description = "Inferno"
+    bex_end_name = "E3TEXT"
   }
 
   episode4 =
@@ -1885,6 +2206,7 @@ ULTDOOM.EPISODES =
 
     name_patch = "M_EPI4"
     description  = "Thy Flesh Consumed"
+    bex_end_name = "E4TEXT"
   }
 }
 
@@ -2074,8 +2396,24 @@ OB_THEMES["flesh"] =
 {
   label = _("Thy Flesh")
   game = "ultdoom"
-  priority = 12
+  priority = 13
   name_class = "GOTHIC"
   mixed_prob = 20
+}
+
+
+OB_THEMES["mostly_deimos"] =
+{
+  label = _("Deimos-ish")
+  game = "doom1"
+  priority = 15
+}
+
+
+OB_THEMES["mostly_flesh"] =
+{
+  label = _("The Flesh-ish")
+  game = "ultdoom"
+  priority = 12
 }
 

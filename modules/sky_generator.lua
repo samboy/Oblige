@@ -1,8 +1,8 @@
-----------------------------------------------------------------
+------------------------------------------------------------------------
 --  MODULE: sky generator
-----------------------------------------------------------------
+------------------------------------------------------------------------
 --
---  Copyright (C) 2008-2016 Andrew Apted
+--  Copyright (C) 2008-2017 Andrew Apted
 --
 --  This program is free software; you can redistribute it and/or
 --  modify it under the terms of the GNU General Public License
@@ -14,7 +14,7 @@
 --  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
 --  GNU General Public License for more details.
 --
-----------------------------------------------------------------
+------------------------------------------------------------------------
 
 SKY_GEN = { }
 
@@ -28,6 +28,25 @@ SKY_GEN.colormaps =
     8, 7, 6, 5,
     111, 109, 107, 104, 101,
     98, 95, 91, 87, 83, 4
+  }
+
+  RED_NEBULA =
+  {
+    0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,
+    191,190,189,188,186,184,182,180
+  }
+
+  BLUE_NEBULA =
+  {
+    0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,
+    247,246,245,244,243,242,241,240,
+    207,206,205,204,203,202,201,200
+  }
+
+  BROWN_NEBULA =
+  {
+    0,0,0,0,0, 0,0,0,0,0, 0,0,0,0,0,
+    2,2,1,1, 79,79,78,77,76,75,74,73,71,69
   }
 
   -- cloud colors --
@@ -119,7 +138,7 @@ SKY_GEN.colormaps =
 
   SKY_CLOUDS =
   {
-    194, 195, 196, 197, 199, 201
+    193, 194, 195, 196, 197, 198, 199, 200, 201,
   }
 
   PURPLE_CLOUDS =
@@ -135,11 +154,6 @@ SKY_GEN.colormaps =
     115, 119, 123, 127
   }
 
-  BLACK_N_WHITE =
-  {
-    0, 4, 0, 4, 0, 4, 0, 4
-  }
-
   -- hill colors --
 
   BLACK_HILLS =
@@ -149,19 +163,22 @@ SKY_GEN.colormaps =
 
   BROWN_HILLS =
   {
-    0, 2, 1, 79, 77, 75, 73, 70, 67, 64
+    0, 2, 2, 1,
+    79,78,77,76,75,74,73,72,
+    71,70,69,68,67,66,65,64
   }
 
   TAN_HILLS =
   {
-    239, 237, 143, 140, 136, 132, 128
+    239, 238, 237,
+    143, 142, 141, 140, 138, 136, 134, 132, 130, 129, 128
   }
 
   GREEN_HILLS =
   {
     0, 7,
-    127, 126, 125, 124, 123,
-    122, 120, 118, 116, 113
+    127, 126, 125, 124, 123, 122, 121,
+    120, 119, 118, 117, 116, 115, 114, 113
   }
 
   DARKGREEN_HILLS =
@@ -171,7 +188,8 @@ SKY_GEN.colormaps =
 
   HELL_HILLS =
   {
-    0, 6, 47, 45, 43, 41, 39, 37, 35, 33
+    0, 6, 47, 46, 45, 44, 43, 42, 41, 40,
+    39, 38, 37, 36, 35, 34, 33
   }
 
   DARKBROWN_HILLS =
@@ -183,6 +201,13 @@ SKY_GEN.colormaps =
   {
     0, 7, 12, 11, 10, 9, 15, 14, 13,
     159, 158, 157, 156, 155, 154
+  }
+
+  ICE_HILLS =
+  {
+    0, 244,
+    207, 206, 205, 204, 203, 202, 201,
+    200, 198, 197, 195, 194, 193, 192
   }
 }
 
@@ -212,6 +237,7 @@ SKY_GEN.themes =
       BROWN_HILLS = 50
       DARKBROWN_HILLS = 50
       GREENISH_HILLS = 30
+      ICE_HILLS = 10
       BLACK_HILLS = 5
     }
 
@@ -219,6 +245,7 @@ SKY_GEN.themes =
     {
       DARKGREEN_HILLS = 50
       DARKBROWN_HILLS = 50
+      ICE_HILLS = 25
     }
   }
 
@@ -228,8 +255,8 @@ SKY_GEN.themes =
     clouds =
     {
       HELL_CLOUDS = 70
-      HELLISH_CLOUDS = 70
       DARKRED_CLOUDS = 50
+      HELLISH_CLOUDS = 30
       YELLOW_CLOUDS = 30
       ORANGE_CLOUDS = 30
     }
@@ -239,7 +266,7 @@ SKY_GEN.themes =
       HELL_HILLS = 50
       BROWN_HILLS = 50
       DARKBROWN_HILLS = 50
-      BLACK_HILLS = 50
+      BLACK_HILLS = 25
     }
 
     dark_hills =
@@ -256,7 +283,14 @@ function SKY_GEN.generate_skies()
   -- select episode for the starry starry night
   local starry_ep = rand.irange(1, # GAME.episodes)
 
-  if rand.odds(37) then
+  -- less chance of it being the first episode
+  -- [ for people who usually make a single episode or less ]
+  if starry_ep == 1 then
+    starry_ep = rand.irange(1, # GAME.episodes)
+  end
+
+  -- often have no starry sky at all
+  if rand.odds(30) then
     starry_ep = -7
   end
 
@@ -288,9 +322,11 @@ function SKY_GEN.generate_skies()
 
     local seed = int(gui.random() * 1000000)
 
-    local squish = 2.0
+    local is_starry = (_index == starry_ep) or rand.odds(2)
+    local is_nebula = is_starry and rand.odds(60)
 
-    local is_starry = (_index == starry_ep)
+    -- only rarely combine stars + nebula + hills
+    local is_hilly  = rand.odds(sel(is_nebula, 25, 90))
 
 
     local theme_name = theme_list[_index]
@@ -304,19 +340,56 @@ function SKY_GEN.generate_skies()
     end
 
     local theme = all_themes[theme_name]
-
     assert(theme)
-    assert(theme.clouds)
-    assert(theme.hills)
 
-    local hill_tab = theme.hills
+    local cloud_tab = assert(theme.clouds)
+    local  hill_tab = assert(theme.hills)
+
+    local nebula_tab =
+    {
+      BLUE_NEBULA  = 90
+       RED_NEBULA  = 60
+      BROWN_NEBULA = 30
+    }
 
 
     gui.fsky_create(256, 128, 0)
 
-    if is_starry then
 
-      --- Stars ---
+    --- Clouds ---
+
+    if not is_starry or is_nebula then
+
+      local name
+
+      if is_nebula then
+        name = rand.key_by_probs(nebula_tab)
+        -- don't use same one again
+        nebula_tab[name] = nebula_tab[name] / 1000
+
+      else
+        name = rand.key_by_probs(cloud_tab)
+        -- don't use same one again
+        cloud_tab[name] = cloud_tab[name] / 1000
+      end
+
+      local colormap = SKY_GEN.colormaps[name]
+      if not colormap then
+        error("SKY_GEN: unknown colormap: " .. tostring(name))
+      end
+
+      gui.printf("  %d = %s\n", _index, name)
+
+      gui.set_colormap(1, colormap)
+      gui.fsky_add_clouds({ seed=seed, colmap=1, squish=2.0 })
+
+      EPI.dark_prob = 10
+    end
+
+
+    --- Stars ---
+
+    if is_starry then
 
       local name = "STARS"
 
@@ -330,36 +403,17 @@ function SKY_GEN.generate_skies()
       gui.set_colormap(1, colormap)
       gui.fsky_add_stars({ seed=seed, colmap=1 })
 
-      if theme.dark_hills then
+      if theme.dark_hills and rand.odds(90) then
         hill_tab = theme.dark_hills
       end
 
       EPI.dark_prob = 100  -- always, for flyingdeath
-
-    else
-      --- Clouds ---
-
-      local name = rand.key_by_probs(theme.clouds)
-      -- don't use same one again
-      theme.clouds[name] = nil
-
-      local colormap = SKY_GEN.colormaps[name]
-      if not colormap then
-        error("SKY_GEN: unknown colormap: " .. tostring(name))
-      end
-
-      gui.printf("  %d = %s\n", _index, name)
-
-      gui.set_colormap(1, colormap)
-      gui.fsky_add_clouds({ seed=seed, colmap=1, squish=squish })
-
-      EPI.dark_prob = 10
     end
 
 
-    if rand.odds(80) then
+    --- Hills ---
 
-      --- Hills ---
+    if is_hilly then
 
       local name = rand.key_by_probs(hill_tab)
       -- don't use same one again
@@ -372,8 +426,26 @@ function SKY_GEN.generate_skies()
 
       gui.printf("    + %s\n", name)
 
+      local info =
+      {
+        seed = seed + 1
+        colmap = 2
+      }
+
+      info.max_h = rand.pick({0.6, 0.65, 0.7, 0.8 })
+      info.min_h = rand.pick({ -0.2, -0.1 })
+
+      info.frac_dim = rand.pick({1.4, 1.65, 1.8, 1.9 })
+
+      -- sometimes make more pointy mountains
+      if rand.odds(50) then
+        info.power = 3.1
+        info.max_h = info.max_h + 0.1
+        info.min_h = info.min_h + 0.3
+      end
+
       gui.set_colormap(2, colormap)
-      gui.fsky_add_hills({ seed=seed+1, colmap=2, max_h=0.6 })
+      gui.fsky_add_hills(info)
     end
 
     gui.fsky_write(EPI.sky_patch)
@@ -392,9 +464,11 @@ end
 OB_MODULES["sky_generator"] =
 {
   label = _("Sky Generator")
-  priority = 85
 
-  game = { doom1=1, doom2=1 }
+  side = "left"
+  priority = 93
+
+  game = "doomish"
 
   hooks =
   {

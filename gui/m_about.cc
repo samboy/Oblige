@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2016 Andrew Apted
+//  Copyright (C) 2006-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -26,10 +26,9 @@
 #include "lib_util.h"
 
 
-#define TITLE_COLOR  fl_color_cube(0,3,1)
+#define TITLE_COLOR  fl_color_cube(0,2,4)
 
-#define INFO_COLOR   fl_color_cube(2,7,0)
-#define INFO_COLOR2  fl_rgb_color(127, 255, 144)
+#define INFO_COLOR   fl_rgb_color(144, 192, 255)
 
 
 class UI_About : public Fl_Window
@@ -90,7 +89,7 @@ const char *UI_About::Text =
 	"OBLIGE is a random level generator\n"
 	"for classic FPS games like DOOM\n"
 	"\n"
-	"Copyright (C) 2006-2016 Andrew Apted, et al\n"
+	"Copyright (C) 2006-2017 Andrew Apted, et al\n"
 	"\n"
 	"This program is free software, and may be\n"
 	"distributed and modified under the terms of\n"
@@ -110,9 +109,6 @@ UI_About::UI_About(int W, int H, const char *label) :
 	Fl_Window(W, H, label),
 	want_quit(false)
 {
-	// cancel Fl_Group's automatic add crap
-	end();
-
 	// non-resizable
 	size_range(W, H, W, H);
 
@@ -131,7 +127,6 @@ UI_About::UI_About(int W, int H, const char *label) :
 	box->align(FL_ALIGN_INSIDE | FL_ALIGN_CENTER);
 	box->labelcolor(TITLE_COLOR);
 	box->labelsize(FL_NORMAL_SIZE * 5 / 3);
-	add(box);
 
 	cy += box->h() + kf_h(6);
 
@@ -144,8 +139,7 @@ UI_About::UI_About(int W, int H, const char *label) :
 	box = new Fl_Box(pad, cy, W-pad-pad, text_h, _(Text));
 	box->align(FL_ALIGN_INSIDE | FL_ALIGN_CENTER);
 	box->box(FL_UP_BOX);
-	box->color(alternate_look ? INFO_COLOR2 : INFO_COLOR);
-	add(box);
+	box->color(INFO_COLOR);
 
 	cy += box->h() + kf_h(10);
 
@@ -156,10 +150,9 @@ UI_About::UI_About(int W, int H, const char *label) :
 	UI_HyperLink *link = new UI_HyperLink(pad, cy, W-pad*2, kf_h(30), URL, URL);
 	link->align(FL_ALIGN_CENTER);
 	link->labelsize(FL_NORMAL_SIZE * 3 / 2);
+
 	if (alternate_look)
 		link->color(FL_LIGHT3, FL_LIGHT3);
-
-	add(link);
 
 	cy += link->h() + kf_h(16);
 
@@ -168,20 +161,19 @@ UI_About::UI_About(int W, int H, const char *label) :
 
 	// finally add an "OK" button
 	Fl_Group *darkish = new Fl_Group(0, cy, W, H - cy);
-	darkish->end();
 	darkish->box(FL_FLAT_BOX);
-	darkish->color(BUILD_BG, BUILD_BG);
+	darkish->color(FL_DARK3, FL_DARK3);
+	{
+		int bw = kf_w(60);
+		int bh = kf_h(30);
+		int by = H - (H - cy + bh)/2;
 
-	add(darkish);
+		Fl_Button *button = new Fl_Button(W - bw*2, by, bw, bh, fl_ok);
+		button->callback(callback_Quit, this);
+	}
+	darkish->end();
 
-
-	int bw = kf_w(60);
-	int bh = kf_h(30);
-	int by = H - (H - cy + bh)/2;
-
-	Fl_Button *button = new Fl_Button(W - bw*2, by, bw, bh, fl_ok);
-	button->callback(callback_Quit, this);
-	darkish->add(button);
+	end();
 }
 
 

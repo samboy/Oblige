@@ -4,7 +4,7 @@
 --
 --  Oblige Level Maker
 --
---  Copyright (C) 2006-2016 Andrew Apted
+--  Copyright (C) 2006-2017 Andrew Apted
 --
 --  This program is free software; you can redistribute it and/or
 --  modify it under the terms of the GNU General Public License
@@ -131,15 +131,18 @@ end
 
 
 function Player_give_room_stuff(R)
+  -- give weapons, plus any ammo they come with
   if not PARAM.hexen_weapons then
     each name in R.weapons do
       Player_give_weapon(name)
+
       local weap = GAME.WEAPONS[name]
       if weap and weap.give then
         each CL,hmodel in LEVEL.hmodels do
           Player_give_stuff(hmodel, weap.give)
         end
       end
+
       EPISODE.seen_weapons[name] = 1
     end
   end
@@ -149,6 +152,18 @@ function Player_give_room_stuff(R)
     each name in R.items do
       local info = GAME.NICE_ITEMS[name] or GAME.PICKUPS[name]
       if info and info.give then
+        each CL,hmodel in LEVEL.hmodels do
+          Player_give_stuff(hmodel, info.give)
+        end
+      end
+    end
+  end
+
+  -- handle storage rooms too
+  if R.storage_items then
+    each pair in R.storage_items do
+      local info = assert(pair.item)
+      if info.give then
         each CL,hmodel in LEVEL.hmodels do
           Player_give_stuff(hmodel, info.give)
         end
@@ -270,18 +285,19 @@ function Player_has_weapon(weap_needed)
 end
 
 
-function Player_has_min_weapon(min_weapon)
+function Player_max_damage()
+  local result = 5
+
   each name,info in GAME.WEAPONS do
-    if (info.level or 0) >= min_weapon then
-      if Player_has_weapon({ [name]=1 }) then
-        return true
-      end
+    local W_damage = info.rate * info.damage
+
+    if W_damage > result and Player_has_weapon({ [name]=1 }) then
+      result = W_damage
     end
   end
 
-  return false
+  return result
 end
-
 
 
 function Player_find_initial_weapons()
@@ -460,11 +476,6 @@ function Item_simulate_battle(R)
       ammo_mul = ammo_mul * factor
     end
 
-    if OB_CONFIG.mode == "coop" then
-      heal_mul = heal_mul * COOP_HEALTH_FACTOR
-      ammo_mul = ammo_mul * COOP_AMMO_FACTOR
-    end
-
     each name,qty in stats do
       if name == "health" then
         stats[name] = qty * heal_mul
@@ -583,39 +594,39 @@ function Item_simulate_battle(R)
 
   ---| Item_simulate_battle |---
 
-    assert(R.monster_list)
+  assert(R.monster_list)
 
-    R.item_stats = make_empty_stats()
+  R.item_stats = make_empty_stats()
 
-    if #R.monster_list >= 1 then
-      each CL,hmodel in LEVEL.hmodels do
-        battle_for_class(CL, hmodel)
-      end
+  if #R.monster_list >= 1 then
+    each CL,hmodel in LEVEL.hmodels do
+      battle_for_class(CL, hmodel)
     end
+  end
 end
 
 
 
 function Item_distribute_stats()
-  --|
-  --| This distributes the item statistics (how much health and ammo to
-  --| give the player needs) into earlier rooms and also storage rooms
-  --| in the same zone.
-  --|
+  --
+  -- This distributes the item statistics (how much health and ammo to
+  -- give to the player) into earlier rooms.
+  --
+
 
   -- health mainly stays in same room (a reward for killing the monsters).
   -- ammo mainly goes back, to prepare player for the fight.
-  local HEALTH_DISTRIB  = 0.35
-  local AMMO_DISTRIB    = 0.90
-  local STORAGE_DISTRIB = 0.30
+  local HEALTH_RATIO  = 0.35
+  local AMMO_RATIO    = 0.90
 
 
-  local function get_other_locs(R)
+  local function get_earlier_rooms(R)
     local list = {}
 
-    -- visit previous rooms
-    local N = R
     local ratio = 1.0
+    local total = 0.0
+
+    local N = R
 
     while N.entry_conn do
       N = N.entry_conn:other_room(N)
@@ -623,29 +634,42 @@ function Item_distribute_stats()
       -- do not cross zones
       if N.zone != R.zone then break; end
 
-      if N.kind == "hallway"   then continue end
-      if N.kind == "stairwell" then continue end
+      -- never move stuff into hallways
+      if N.is_hallway then continue end
 
-      table.insert(list, { room=N, ratio=ratio })
+      -- give more in larger rooms
+      local val = ratio * (N.svolume ^ 0.7)
+
+      table.insert(list, { room=N, ratio=val })
+      total = total + val
 
       ratio = ratio * 0.7
     end
 
-    -- add storage rooms
---[[ FIXME
-    if R.zone.storage_rooms then
-      each N in R.zone.storage_rooms do
-        ratio = rand.pick({ 0.25, 0.5, 0.75 })
-        table.insert(list, { room=R, ratio=ratio, is_storage=true })
+    -- handle hallways that are entered from a different zone
+    -- (i.e. via a keyed door).
+    if R.is_hallway and table.empty(list) then
+      N = R.entry_conn:other_room(N)
+
+      table.insert(list, { room=N, ratio=1.0 })
+      total = 1.0
+    end
+
+    -- adjust ratio values to be in range 0.0 - 1.0
+    if total > 0 then
+      each loc in list do
+        loc.ratio = loc.ratio / total
       end
     end
---]]
 
     return list
   end
 
 
-  local function distribute(R, N, ratio)
+  local function distribute_to_room(R, N, ratio)
+    -- ratio is a value between 0.0 and 1.0, based on the number
+    -- and size of the earlier rooms (in the loc list).
+
     each CL,R_stats in R.item_stats do
       local N_stats = N.item_stats[CL]
 
@@ -654,42 +678,32 @@ function Item_distribute_stats()
 
         local value = qty * ratio
 
-        if N.is_storage then
-          value = value * STORAGE_DISTRIB
+        -- apply a ratio based on type of item (on top of the room ratio)
+        -- [ for hallways, we need EVERYTHING to go elsewhere ]
+        if R.is_hallway then
+          -- no change
         elseif stat == "health" then
-          value = value * HEALTH_DISTRIB
+          value = value * HEALTH_RATIO
         else 
-          value = value * AMMO_DISTRIB
+          value = value * AMMO_RATIO
         end
 
         N_stats[stat] = (N_stats[stat] or 0) + value
         R_stats[stat] =  R_stats[stat]       - value
 
-        gui.debugf("  distributing %s:%1.1f [%s]  %s --> %s\n",
-                   stat, value,  CL, R.name, N.name)
+--      gui.debugf("  distributing %s:%1.1f [%s]  %s --> %s\n",
+--                 stat, value,  CL, R.name, N.name)
       end
     end
   end
 
 
-  local function distribute_from_room(R)
-    -- skip storage rooms
-    if R.is_storage then return end
-
+  local function visit_room(R)
     -- no stats?
     if not R.item_stats then return end
 
-    local list  = get_other_locs(R)  -- may be empty
-    local total = 0
-
-    gui.debugf("distribute_from_room %s : locs:%d\n", R.name, #list)
-
-    each loc in list do
-      total = total + loc.ratio
-    end
-
-    each loc in list do
-      distribute(R, loc.room, loc.ratio / total)
+    each loc in get_earlier_rooms(R) do
+      distribute_to_room(R, loc.room, loc.ratio)
     end
   end
 
@@ -706,13 +720,12 @@ function Item_distribute_stats()
 
   ---| Item_distribute_stats |---
 
-  -- Note: we don't distribute to hallways
-
   each R in LEVEL.rooms do
-    distribute_from_room(R)
+    visit_room(R)
   end
 
----  dump_results
+--DEBUG:
+--  dump_results()
 end
 
 
@@ -724,9 +737,10 @@ function Item_pickups_for_class(CL)
   -- (the easy part) and *where* to place them (the hard part).
   --
 
+
   -- this accumulates excess stats
   -- e.g. if wanted health == 20 and we give a medikit, add 5 to excess["health"]
-  local excess
+  local excess = {}
 
 
   local function grab_a_big_spot(R)
@@ -818,7 +832,9 @@ function Item_pickups_for_class(CL)
       local count = pair.count
 
       -- big item?
-      if (item.rank or 0) >= 2 and count == 1 and not table.empty(R.big_spots) then
+      if ((item.rank or 0) >= 2 or pair.is_storage) and count == 1 and
+         not table.empty(R.big_spots)
+      then
         local spot = grab_a_big_spot(R)
         place_item_in_spot(item.name, spot)
         continue
@@ -850,10 +866,9 @@ function Item_pickups_for_class(CL)
     local item_tab = {}
 
     each name,info in GAME.PICKUPS do
-      -- compatibilty crud...
-      local prob = info.add_prob or info.prob
+      local prob = info.add_prob or 0
 
-      if prob and
+      if prob > 0 and
          (stat == "health" and info.give[1].health) or
          (info.give[1].ammo == stat)
       then
@@ -900,7 +915,7 @@ function Item_pickups_for_class(CL)
     -- more stuff in start room
     if R.is_start then
       if stat == "health" then
-        bonus = 20
+        bonus = 20 * HEALTH_FACTORS[OB_CONFIG.health]
       end
     end
 
@@ -910,7 +925,7 @@ function Item_pickups_for_class(CL)
         local info = GAME.WEAPONS[name]
 
         if info.ammo and info.ammo == stat and info.bonus_ammo then
-          bonus = bonus + info.bonus_ammo
+          bonus = bonus + info.bonus_ammo * AMMO_FACTORS[OB_CONFIG.ammo]
         end
       end
     end
@@ -921,7 +936,7 @@ function Item_pickups_for_class(CL)
 
     -- compensation for environmental hazards
     if stat == "health" and R.hazard_health then
-      bonus = bonus + R.hazard_health
+      bonus = bonus + R.hazard_health * HEALTH_FACTORS[OB_CONFIG.health]
     end
 
     return bonus
@@ -1009,6 +1024,11 @@ function Item_pickups_for_class(CL)
 
     rand.shuffle(R.item_spots)
 
+    -- handle storage rooms
+    if R.storage_items then
+      place_item_list(R, R.storage_items)
+    end
+
     -- sort items by rank
     -- also: place large clusters before small ones
     table.sort(item_list, compare_items)
@@ -1018,8 +1038,6 @@ function Item_pickups_for_class(CL)
 
 
   ---| Item_pickups_for_class |---
-
-  excess = {}
 
   each R in LEVEL.rooms do
     pickups_in_room(R)

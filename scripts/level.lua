@@ -4,7 +4,7 @@
 --
 --  Oblige Level Maker
 --
---  Copyright (C) 2006-2016 Andrew Apted
+--  Copyright (C) 2006-2017 Andrew Apted
 --
 --  This program is free software; you can redistribute it and/or
 --  modify it under the terms of the GNU General Public License
@@ -72,12 +72,11 @@
 
     global_pal      -- global palette, can ONLY use these monsters [ except for bosses ]
 
-    boss_fights : list(BOSS_FIGHT)   -- boss fighrs, from biggest to smallest
+    boss_fights : list(BOSS_FIGHT)   -- boss fights, from biggest to smallest
 
 
     === Weapon planning ===
 
-    weapon_level    -- the maximum level of a weapon we can use [ except secret_weapon ]
     weapon_quota    -- number of weapons to add in this level [ except secrets ]
 
       new_weapons   -- weapons which player does not have yet [ may overlap with start_weapons ]
@@ -107,6 +106,10 @@
     start_room : ROOM  -- the starting room
      exit_room : ROOM  -- the exit room
 
+    junctions[id1 + id2] : JUNCTION
+
+    corners : array_2D(CORNER)
+
     -- TODO: lots of other fields : document important ones
 --]]
 
@@ -130,81 +133,62 @@
 
 function Level_determine_map_size(LEV)
   --
-  -- Determines size of map (Width x Height) in grid points, based on the
-  -- user's settings and how far along in the episode or game we are.
+  -- Determines size of map (Width x Height) in grid squares,
+  -- based on the user's settings and how far along in the
+  -- episode or game we are.
   --
 
   local ob_size = OB_CONFIG.size
 
+  local W, H
+
   -- there is no real "progression" when making a single level.
-  -- hence use mixed mode instead.
+  -- hence use the regular size instead.
   if OB_CONFIG.length == "single" then
     if ob_size == "prog" or ob_size == "epi" then
-      ob_size = "mixed"
+      ob_size = "regular"
     end
   end
 
   -- Mix It Up --
 
   if ob_size == "mixed" then
-    local SIZES = { 21,23,25, 29,33,37, 41,43,49 }
+    local MIXED_PROBS =
+    {
+      small=30, regular=50, large=30, extreme=5
+    }
 
-    if OB_CONFIG.mode == "dm" then
-      SIZES = { 21,23,25, 29,33,39 }
-    end
-
-    local W = rand.pick(SIZES)
-    local H = rand.pick(SIZES)
-
-    -- prefer the map to be wider than it is tall
-    if W < H then W, H = H, W end
-
-    return W, H
+    ob_size = rand.key_by_probs(MIXED_PROBS)
   end
 
-  -- Progressive --
-
   if ob_size == "prog" or ob_size == "epi" then
+
+    -- Progressive --
+
     local along = LEV.game_along ^ 0.66
 
     if ob_size == "epi" then along = LEV.ep_along end
 
-    local n = int(1 + along * 8.9)
+    along = math.clamp(0, along, 1)
 
-    if n < 1 then n = 1 end
-    if n > 9 then n = 9 end
+    -- this basically ramps from "small" --> "large"
+    W = int(22 + along * 24)
 
-    local SIZES = { 25,27,29, 31,33,35, 37,39,41 }
+  else
+    -- Named sizes --
 
-    local W = SIZES[n]
-    local H = W - 4
+    local SIZES = { small=20, regular=34, large=48, extreme=72 }
 
-    -- not so big in Deathmatch mode
-    if OB_CONFIG.mode == "dm" then return H, H - 2 end
-
-    return W, H
+    W = SIZES[ob_size]
   end
-
-  -- Named sizes --
-
-  -- smaller maps for Deathmatch mode
-  if OB_CONFIG.mode == "dm" then
-    local SIZES = { small=21, regular=27, large=35, extreme=51 }
-
-    local W = SIZES[ob_size]
-
-    return W, W
-  end
-
-  local SIZES = { small=27, regular=35, large=45, extreme=61 }
-
-  local W = SIZES[ob_size]
 
   if not W then
     error("Unknown size keyword: " .. tostring(ob_size))
   end
 
-  return W, W - 4
+  local H = 1 + int(W * 0.8)
+
+  return W, H
 end
 
 
@@ -213,8 +197,12 @@ function Episode_determine_map_sizes()
   each LEV in GAME.levels do
     local W, H = Level_determine_map_size(LEV)
 
-    LEV.map_W = W - 1
-    LEV.map_H = H - 1
+    -- sanity check
+    assert(W + 4 <= SEED_W)
+    assert(H + 4 <= SEED_H)
+
+    LEV.map_W = W
+    LEV.map_H = H
   end
 end
 
@@ -272,16 +260,18 @@ end
 function Episode_plan_monsters()
   --
   -- Decides various monster stuff :
-  --   
+  --
   -- (1) monster palette for each level
   -- (2) the end-of-level boss of each level
   -- (3) guarding monsters (aka "mini bosses")
   -- (4) one day: boss fights for special levels
   --
 
-  local seen_bosses = {}
+  local used_types  = {}
+  local used_bosses = {}
+  local used_guards = {}
 
-  local BOSS_AHEAD = 2.1  -- TODO : review this number
+  local BOSS_AHEAD = 2.2
 
 
   local function default_level(info)
@@ -323,7 +313,7 @@ function Episode_plan_monsters()
     local mon_along = LEV.game_along
 
     -- this is for Doom 1 / Ultimate Doom / Heretic
-    if PARAM.episodic_monsters then
+    if PARAM.episodic_monsters or OB_CONFIG.ramp_up == "epi" then
       mon_along = (LEV.ep_along + LEV.game_along) / 2
     end
 
@@ -336,16 +326,16 @@ function Episode_plan_monsters()
       mon_along = rand.skew(0.6, 0.3)
 
     elseif OB_CONFIG.length == "game" then
-      -- reach peak strength about halfway along
-      mon_along = mon_along * 2.1
+      -- reach peak strength about 2/3rds along
+      mon_along = mon_along * 1.7
     end
 
     assert(mon_along >= 0)
 
-    -- apply the user Strength setting
+    -- apply the user Ramp-up setting
+    -- [ and some tweaks for the Strength setting ]
 
-    local factor = STRENGTH_FACTORS[OB_CONFIG.strength]
-    assert(factor)
+    local factor = RAMP_UP_FACTORS[OB_CONFIG.ramp_up] or 1.0
 
     mon_along = mon_along * factor
 
@@ -355,7 +345,7 @@ function Episode_plan_monsters()
     mon_along = 1 + 8.4 * mon_along
 
     -- add some randomness
-    mon_along = mon_along + 1.7 * (gui.random() ^ 2)
+    mon_along = mon_along + 1.4 * (gui.random() ^ 2)
 
     LEV.monster_level = mon_along
   end
@@ -377,7 +367,7 @@ function Episode_plan_monsters()
 
     if info.level > LEV.monster_level then return false end
 
-    if info.min_weapon and info.min_weapon > LEV.max_weapon then return false end
+    if info.weap_min_damage and info.weap_min_damage > LEV.weap_max_damage then return false end
 
     if not check_theme(LEV, info) then return false end
 
@@ -442,7 +432,7 @@ function Episode_plan_monsters()
     -- decides which monsters we will use on this level.
     -- easiest way is to pick some monsters NOT to use.
     --
-    -- Note: we always exclude BOSS monsters here.
+    -- Note: we exclude BOSS monsters here, except in CRAZY mode.
     --
 
     LEV.global_pal = {}
@@ -455,7 +445,7 @@ function Episode_plan_monsters()
 
     each name,_ in LEV.seen_monsters do
       local info = GAME.MONSTERS[name]
-      if not info.boss_type then
+      if not info.boss_type or OB_CONFIG.strength == "crazy" then
         LEV.global_pal[name] = 1
       end
     end
@@ -479,11 +469,12 @@ function Episode_plan_monsters()
 
 
   local function is_boss_usable(LEV, mon, info)
+    if info.prob <= 0 then return false end
+    if info.boss_prob == 0 then return false end
+
     if info.level > LEV.monster_level + BOSS_AHEAD then return false end
 
-    if info.min_weapon and info.min_weapon > LEV.max_weapon then return false end
-
-    if info.boss_prob == 0 then return false end
+    if info.weap_min_damage and info.weap_min_damage > LEV.weap_max_damage then return false end
 
     return true
   end
@@ -508,9 +499,9 @@ function Episode_plan_monsters()
     if info.prob <= 0 then return 0 end
 
     -- simply too weak
-    if info.level < 3 then return 0 end
+    if info.health < 45 then return 0 end
 
-    if info.min_weapon and info.min_weapon > LEV.max_weapon then return 0 end
+    if info.weap_min_damage and info.weap_min_damage > LEV.weap_max_damage then return 0 end
 
     if info.level > LEV.monster_level + BOSS_AHEAD then return 0 end
 
@@ -522,16 +513,20 @@ function Episode_plan_monsters()
 
     -- base probability : this value is designed to take into account
     -- the settings of the monster control module
-    local prob = (info.damage or 2)
-    prob = prob ^ 0.6
+    local prob = (info.damage or 1)
 
-    local is_seen  = seen_bosses[info.name]
-    local is_avail = LEV.seen_monsters[info.name]
-
-    if is_seen then
-      -- no change
+    if OB_CONFIG.bosses == "easier" then
+      prob = prob ^ 0.3
+    elseif OB_CONFIG.bosses == "harder" then
+      prob = prob ^ 1.2
     else
-      prob = prob * sel(is_avail, 100, 1000)
+      prob = prob ^ 0.6
+    end
+
+    if LEV.seen_monsters[info.name] then
+      prob = prob / 10
+    elseif not used_guards[info.name] then
+      prob = prob * 5
     end
 
     return prob
@@ -566,7 +561,8 @@ function Episode_plan_monsters()
     local c_nasty = count_boss_type(LEV, "nasty")
     local c_tough = count_boss_type(LEV, "tough")
 
-    LEV.boss_quotas = { minor=0, nasty=0, tough=0 }
+    local user_factor = BOSS_FACTORS[OB_CONFIG.bosses]
+    assert(user_factor)
 
     -- Tough quota
 
@@ -575,35 +571,46 @@ function Episode_plan_monsters()
     if LEV.dist_to_end then
       local factor = sel(c_tough < 2, 40, 20)
       prob1 = 100 - (LEV.dist_to_end - 1) * factor
+      prob1 = prob1 * user_factor
     end
 
     if c_tough > 0 and rand.odds(prob1) then
       LEV.boss_quotas.tough = 1
 
-      prob1 = prob1 * LEV.game_along * 0.6
+      prob1 = prob1 * LEV.game_along * user_factor
 
-      if rand.odds(prob1) then
+      if rand.odds(prob1) and used_types["tough"] then
         LEV.boss_quotas.tough = 2
       end
+    end
+
+    if LEV.boss_quotas.tough > 0 then
+      used_types["tough"] = true
     end
 
 
     -- Nasty quota
 
-    local prob2 = sel(c_nasty < 2, 40, 70)
+    local prob2 = sel(c_nasty < 2, 25, 40)
 
     if LEV.dist_to_end == 2 then
-      prob2 = 99
+      prob2 = 90
     end
+
+    prob2 = prob2 * user_factor
 
     if c_nasty > 0 and rand.odds(prob2) then
       LEV.boss_quotas.nasty = 1
 
-      prob2 = prob2 * LEV.game_along * 0.6
+      prob2 = prob2 * LEV.game_along * user_factor
 
-      if rand.odds(prob2) and not LEV.is_secret then
+      if rand.odds(prob2) and used_types["nasty"] then
         LEV.boss_quotas.nasty = 2
       end
+    end
+
+    if LEV.boss_quotas.nasty > 0 then
+      used_types["nasty"] = true
     end
 
 
@@ -615,14 +622,20 @@ function Episode_plan_monsters()
       prob3 = 99
     end
 
+    prob3 = prob3 * user_factor
+
     if c_minor > 0 and rand.odds(prob3) then
       LEV.boss_quotas.minor = 1
 
-      prob3 = prob3 * LEV.game_along * 0.6
+      prob3 = prob3 * LEV.game_along * user_factor
 
-      if rand.odds(prob3) and not LEV.is_secret then
+      if rand.odds(prob3) and used_types["minor"] then
         LEV.boss_quotas.minor = 2
       end
+    end
+
+    if LEV.boss_quotas.minor > 0 then
+      used_types["minor"] = true
     end
 
 
@@ -646,23 +659,27 @@ function Episode_plan_monsters()
 
     -- select how many
 
-    local count = LEV.monster_level / info.level
+    local count = 1 + LEV.game_along
 
     if boss_type != "tough" then count = count ^ 1.5 end
 
-    if OB_CONFIG.strength == "weak" or
-       OB_CONFIG.strength == "easier"
-    then count = count / 2 end
+    -- user quantity setting
+    local factor = MONSTER_QUANTITIES[OB_CONFIG.mons] or 1
+    if factor > 1 then factor = (factor + 1) / 2 end
+
+    count = count * factor
+
+    if OB_CONFIG.bosses == "easier" then count = count / 1.6 end
+    if OB_CONFIG.bosses == "harder" then count = count * 1.6 end
 
     count = rand.int(count)
-    if count < 1 then count = 1 end
 
-    if boss_type == "minor" then
-      count = math.clamp(1, count, 6)
+    if boss_type == "tough" then
+      count = math.clamp(1, count, 2)
     elseif boss_type == "nasty" then
       count = math.clamp(1, count, 4)
     else
-      count = math.clamp(1, count, 2)
+      count = math.clamp(1, count, 6)
     end
 
     -- secondary boss fights should be weaker than primary one
@@ -671,18 +688,18 @@ function Episode_plan_monsters()
     elseif along == 2 then
       if count == 2 or count == 3 then
         count = rand.sel(75, 1, 2)
-      else
+      elseif count > 1 then
         count = rand.sel(50, 2, math.ceil(count / 2))
       end
     end
 
-    -- this is mainly to prevent Masterminds infighting
+    -- this is to prevent Masterminds infighting
     if info.boss_limit then
       count = math.min(count, info.boss_limit)
     end
 
     -- ensure first encounter with a boss only uses a single one
-    count = math.min(count, 1 + (seen_bosses[mon] or 0))
+    count = math.min(count, 1 + (used_bosses[mon] or 0))
 
 --  stderrf("  count %1.2f for '%s'\n", count, mon)
 
@@ -695,7 +712,9 @@ function Episode_plan_monsters()
 
     table.insert(LEV.boss_fights, FIGHT)
 
-    seen_bosses[mon] = math.max(seen_bosses[mon] or 0, count)
+    used_bosses[mon] = math.max(used_bosses[mon] or 0, count)
+
+    return true  -- ok
   end
 
 
@@ -711,7 +730,16 @@ function Episode_plan_monsters()
 
     -- select how many
 
-    local count = 3.5 * LEV.monster_level / info.level
+    local count = 2 * (1.5 + LEV.game_along)
+
+    -- user quantity setting
+    local factor = MONSTER_QUANTITIES[OB_CONFIG.mons] or 1
+    if factor > 1 then factor = (factor + 1) / 2 end
+
+    count = count * factor
+
+    if OB_CONFIG.bosses == "easier" then count = count / 1.6 end
+    if OB_CONFIG.bosses == "harder" then count = count * 1.6 end
 
     -- secondary boss fights should be weaker than primary one
     count = count / (1.8 ^ (along - 1))
@@ -724,8 +752,8 @@ function Episode_plan_monsters()
     count = rand.int(count)
     count = math.clamp(1, count, 8)
 
-    -- ensure first encounter with a boss only uses a single one
-    count = math.min(count, 2 + (seen_bosses[mon] or 0))
+    -- ensure first encounter with a guard only uses a single one
+    count = math.min(count, 1 + (used_guards[mon] or 0))
 
     local FIGHT =
     {
@@ -736,12 +764,9 @@ function Episode_plan_monsters()
 
     table.insert(LEV.boss_fights, FIGHT)
 
-    LEV.seen_guards[mon] = 1
+    LEV.seen_guards[mon] = true
 
-    -- ONLY BLAH BLAH
-    if along == 1 then
-      seen_bosses[mon] = math.max(seen_bosses[mon] or 0, count)
-    end
+    used_guards[mon] = math.max(used_guards[mon] or 0, count)
   end
 
 
@@ -750,13 +775,15 @@ function Episode_plan_monsters()
       LEV.boss_fights = {}
       LEV.seen_guards = {}
 
-      pick_boss_quotas(LEV)
+      LEV.boss_quotas = { minor=0, nasty=0, tough=0 }
+
+      if LEV.prebuilt  then continue end
+      if LEV.is_secret then continue end
 
       if OB_CONFIG.strength == "crazy" then continue end
+      if OB_CONFIG.bosses   == "none"  then continue end
 
-      if LEV.prebuilt then continue end
-
--- stderrf("%s:\n", LEV.name)
+      pick_boss_quotas(LEV)
 
       for i = 1, LEV.boss_quotas.tough do create_fight(LEV, "tough", i) end
       for i = 1, LEV.boss_quotas.nasty do create_fight(LEV, "nasty", i) end
@@ -822,6 +849,9 @@ function Episode_plan_monsters()
 
   init_monsters()
 
+  if OB_CONFIG.bosses == "easier" then BOSS_AHEAD = 1.9 end
+  if OB_CONFIG.bosses == "harder" then BOSS_AHEAD = 2.7 end
+
   each LEV in GAME.levels do
     calc_monster_level(LEV)
   end
@@ -841,41 +871,16 @@ end
 
 function Episode_plan_weapons()
   --
-  -- Decides weapon stuff for each level:
+  -- Decides weapon stuff :
   --
-  -- (1) the starting weapon(s) of a level
-  -- (2) other must-give weapons of a level
-  -- (3) a weapon for secrets [ provided earlier than normal ]
+  -- (1) which levels the weapons are first used on
+  -- (2) the starting weapon(s) of a level
+  -- (3) other must-give weapons of a level
+  -- (4) a earlier-than-normal weapon for secrets
   --
 
-  local function calc_weapon_level(LEV)
-    local weap_along = LEV.game_along
-
-    -- allow everything in a single level, or the "Mixed" choice
-    if OB_CONFIG.length == "single" or OB_CONFIG.weapons == "mixed" then
-      weap_along = 1.0
-
-    elseif OB_CONFIG.length == "episode" then
-      weap_along = weap_along * 1.2
-
-    elseif OB_CONFIG.length == "game" then
-      -- reach peak sooner in a full game (after about an episode)
-      weap_along = weap_along * 3.0
-    end
-
-    -- small adjustment for the 'Weapons' setting
-    if OB_CONFIG.weapons == "more" then
-      weap_along = weap_along ^ 0.8 + 0.2
-    end
-
-    weap_along = 1 + 9 * weap_along
-
-    -- add some randomness
-    weap_along = weap_along + 1.6 * (gui.random() ^ 2)
-
-    LEV.weapon_level = weap_along
-  end
-
+  local QUOTA_ADJUSTS = { very_late=0.55, later=0.70, sooner=1.50, very_soon=2.00 }
+  local PLACE_ADJUSTS = { very_late=1.70, later=1.30, sooner=0.50, very_soon=0.20 }
 
   local function calc_weapon_quota(LEV)
     -- decide how many weapons to give
@@ -890,16 +895,19 @@ function Episode_plan_weapons()
 
     local lev_size = math.clamp(30, LEV.map_W + LEV.map_H, 100)
 
-    local quota = (lev_size - 20) / 25 + gui.random()
+    local quota = (lev_size - 12) / 25 + gui.random()
 
-    -- more as game progresses
-    quota = quota + LEV.game_along * 2.0
-
-    if OB_CONFIG.weapons == "less" then quota = quota / 1.7 end
-    if OB_CONFIG.weapons == "more" then quota = quota * 1.7 end
+    quota = quota * (QUOTA_ADJUSTS[OB_CONFIG.weapons] or 1.0)
 
     if OB_CONFIG.weapons == "mixed" then
-      quota = quota * rand.pick({ 0.6, 1.0, 1.7 })
+      quota = quota * rand.pick({ 0.6, 1.0, 1.6 })
+    end
+
+    -- more as game progresses
+    if PARAM.pistol_starts then
+      quota = quota + math.clamp(0, LEV.game_along, 0.5) * 3.1
+    else
+      quota = quota + math.clamp(0, LEV.game_along, 0.5) * 6.1
     end
 
     quota = quota * (PARAM.weapon_factor or 1)
@@ -908,7 +916,9 @@ function Episode_plan_weapons()
     if quota < 1 then quota = 1 end
 
     -- be more generous in the very first level
-    if LEV.id == 1 and quota == 1 and OB_CONFIG.weapons != "less" then
+    if LEV.id <= 2 and quota == 1 and
+       not (OB_CONFIG.weapons == "later" or OB_CONFIG.weapons == "very_late")
+    then
       quota = 2
     end
 
@@ -952,50 +962,21 @@ function Episode_plan_weapons()
 
     each LEV in GAME.levels do
       gui.debugf("%s\n", LEV.name)
-      gui.debugf("  level = %1.2f\n", LEV.weapon_level)
-      gui.debugf("  quota = %d\n",    LEV.weapon_quota)
 
-      gui.debugf("  new = %s\n",   table.list_str(LEV.new_weapons))
-      gui.debugf("  start = %s\n", table.list_str(LEV.start_weapons))
-      gui.debugf("  other = %s\n", table.list_str(LEV.other_weapons))
+      gui.debugf("  new    = %s\n", table.list_str(LEV.new_weapons))
+      gui.debugf("  start  = %s\n", table.list_str(LEV.start_weapons))
+      gui.debugf("  other  = %s\n", table.list_str(LEV.other_weapons))
+
       gui.debugf("  secret = %s\n", LEV.secret_weapon or "NONE")
+      gui.debugf("  quota  = %d\n", LEV.weapon_quota)
     end
   end
 
 
-  local function spread_new_weapons(L1, L2)
-    local num1 = #L1.new_weapons
-    local num2 = #L2.new_weapons
+  local function should_swap(name1, name2)
+    local info1 = GAME.WEAPONS[name1]
+    local info2 = GAME.WEAPONS[name2]
 
-    if num2 >= L2.weapon_quota then return end
-
-    local diff = num1 - num2
-
-    if num1 < 2 or diff < 0 then return end
-
-    -- chance of moving a single weapon
-    local move_prob = 100
-
-    if diff == 0 then move_prob = 10 end
-    if diff == 1 then move_prob = 33 end
-    if diff == 2 then move_prob = 80 end
-
-    if not rand.odds(move_prob) then return end
-
-    -- Ok, move a weapon
-    -- [ we remove one from beginning of L1, append to the end of L2,
-    --   as this prevents weapons moving too far ahead ]
-    local name = table.remove(L1.new_weapons, 1)
-    table.insert(L2.new_weapons, name)
-
-    gui.debugf("spread new weapon '%s' : %s --> %s\n", name, L1.name, L2.name)
-
-    -- try again
-    spread_new_weapons(L1, L2)
-  end
-
-
-  local function should_swap(info1, info2)
     if info1.upgrades and info1.upgrades == info2.name then
       return true
     end
@@ -1010,59 +991,262 @@ function Episode_plan_weapons()
       local name1 = L1.new_weapons[idx1]
       local name2 = L2.new_weapons[idx2]
 
-      local info1 = GAME.WEAPONS[name1]
-      local info2 = GAME.WEAPONS[name2]
-
-      if should_swap(info1, info2) then
+      if should_swap(name1, name2) then
         L1.new_weapons[idx1] = name2
         L2.new_weapons[idx2] = name1
 
         gui.debugf("swapped weapon '%s' in %s <--> '%s' in %s\n", name1, L1.name, name2, L2.name)
       end
-    end      
+    end
     end
   end
 
 
-  local function pick_new_weapons()
-    local seen_weapons = {}
+  local function summarize_weapons_on_map(LEV)
+    if LEV.prebuilt  then return "#" end
+    if LEV.is_secret then return "#" end
+
+    if table.empty(LEV.new_weapons) then return "-" end
+
+    local str = ""
+
+    each name in LEV.new_weapons do
+      local letter = string.sub(name, 1, 1)
+      if name == "super" then letter = 'D' end
+      if name == "bfg"   then letter = 'B' end
+      str = str .. letter
+    end
+
+    return str
+  end
+
+
+  local function summarize_new_weapon_placement()
+    local line = ""
 
     each LEV in GAME.levels do
-      LEV.new_weapons = {}
+      if LEV.id > 1 then line = line .. "/" end
+      line = line .. summarize_weapons_on_map(LEV)
+    end
 
-      if LEV.prebuilt  then continue end
-      if LEV.is_secret then continue end
+    return line
+  end
 
-      local w_names = table.keys(GAME.WEAPONS)
-      rand.shuffle(w_names)
 
-      each name in w_names do
-        local info = GAME.WEAPONS[name]
-        if (info.add_prob or 0) == 0 then continue end
-        if (info.level or 1) <= LEV.weapon_level and not seen_weapons[name] then
-          table.insert(LEV.new_weapons, name)
-          seen_weapons[name] = true
-        end
+  local function calc_new_weapon_place(info, level_list)
+    -- transform 'level' value into an index into level_list[]
 
-        -- prevent having too many new weapons in this map
-        -- [ they get added to a later map, or simply dropped if no later maps ]
-        if table.size(LEV.new_weapons) >= LEV.weapon_quota then
-          break;
+    -- handle short list of maps
+    -- [ OB_CONFIG.length == "single" or "few" ]
+    if #level_list <= 5 then
+      return rand.pick(level_list)
+    end
+
+    local lev_idx = info.level
+    assert(lev_idx)
+
+    if lev_idx > 1 then
+      -- apply the user Weapons setting
+      local factor = (PLACE_ADJUSTS[OB_CONFIG.weapons] or 1.0)
+
+      -- less spread out when building a single episode
+      if OB_CONFIG.length == "episode" then
+        factor = factor * 0.75
+      end
+
+      lev_idx = 1 + (lev_idx - 1) * factor
+
+      if rand.odds(30) then lev_idx = lev_idx + 1 end
+
+      lev_idx = int(lev_idx * rand.pick({ 1.0, 1.3, 1.6 }))
+    end
+
+    -- ensure it is valid
+    lev_idx = math.clamp(1, lev_idx, #level_list)
+
+    return level_list[lev_idx]
+  end
+
+
+  local function check_new_weapon_at_start()
+    -- ensure the very first level has a new weapon
+    local LEV = GAME.levels[1]
+
+    if not table.empty(LEV.new_weapons) then return end
+
+    for i = 2, #GAME.levels do
+      local NEXT = GAME.levels[i]
+
+      if not table.empty(NEXT.new_weapons) then
+        local weap = table.remove(NEXT.new_weapons, 1)
+        table.insert(LEV.new_weapons, weap)
+        return
+      end
+    end
+  end
+
+
+  local function eval_push_away_offset(level_list, idx, ofs)
+    local LEV = level_list[idx]
+
+    idx = idx + ofs
+
+    -- no such map?
+    if idx < 1 or idx > #level_list then
+      return -1
+    end
+
+    -- prevent moving too far when user wants lots of weapons
+    if math.abs(ofs) >= 2 and
+       (OB_CONFIG.weapons == "sooner" or OB_CONFIG.weapons == "very_soon")
+    then
+      return -1
+    end
+
+    local NEXT = level_list[idx]
+    assert(NEXT)
+
+    -- no point moving when destination is just as full as source
+    local  src_count = table.size( LEV.new_weapons)
+    local dest_count = table.size(NEXT.new_weapons)
+
+    if dest_count >= src_count - 1 then
+      return -2
+    end
+
+    -- best places have no weapons at all
+    local score = 90 - math.min(dest_count, 5) * 10
+
+    -- check if destination is in middle of a run of empty maps
+    if idx-1 >= 1 and idx+1 <= #level_list and
+       dest_count == 0 and
+       table.empty(level_list[idx-1].new_weapons) and
+       table.empty(level_list[idx+1].new_weapons)
+    then
+      score = score + 2
+
+    elseif math.abs(ofs) < 2 then
+      score = score + 1
+    end
+
+    -- tie breaker
+    return score + gui.random()
+  end
+
+
+  local function push_away_a_weapon(level_list, idx)
+    local LEV = level_list[idx]
+
+    assert(not table.empty(LEV.new_weapons))
+
+    local best_ofs
+    local best_score = 0
+
+    for ofs = -2, 2 do
+      if ofs != 0 then
+        local score = eval_push_away_offset(level_list, idx, ofs)
+
+        if score > best_score then
+          best_ofs   = ofs
+          best_score = score
         end
       end
     end
 
-    -- spread them out, esp. when next level has none and previous has >= 2,
-    -- but also sometimes just to randomize things a bit.
+    if best_ofs == nil then return end
 
-    each LEV in GAME.levels do
-      local NL = next_level_in_episode(_index)
+    -- ok --
 
-      if NL and _index >= 2 then
-        spread_new_weapons(LEV, NL)
+    local NEXT = level_list[idx + best_ofs]
+    assert(NEXT)
+
+    local weap = table.remove(LEV.new_weapons, 1)
+
+    table.insert(NEXT.new_weapons, weap)
+    rand.shuffle(NEXT.new_weapons)
+  end
+
+
+  local function spread_new_weapons(level_list)
+    -- prefer not to introduce multiple new weapons per map
+
+    if OB_CONFIG.weapons == "very_soon" then return end
+
+    for idx = 1, #level_list do
+      for loop = 1,5 do
+        if table.size(level_list[idx].new_weapons) >= 2 then
+          push_away_a_weapon(level_list, idx)
+        end
       end
     end
+  end
 
+
+  local function detect_a_weapon_gap(level_list, start)
+    -- returns size of gap, possibly 0, or -1 if there is no gap
+    -- (e.g. if the given map is the last non-empty one).
+
+    if table.empty(level_list[start].new_weapons) then return -1 end
+
+    local finish = start + 1
+
+    while true do
+      if finish > #level_list then return -1 end
+
+      if not table.empty(level_list[finish].new_weapons) then break; end
+
+      finish = finish + 1
+    end
+
+    return finish - start - 1
+  end
+
+
+  local function shift_new_weapons_down(level_list, start)
+    while start < #level_list do
+      local LEV  = level_list[start]
+      assert(LEV)
+
+      local NEXT = level_list[start + 1]
+      assert(NEXT)
+
+      table.append(LEV.new_weapons, NEXT.new_weapons)
+      NEXT.new_weapons = {}
+
+      start = start + 1
+    end
+  end
+
+
+  local function reduce_weapon_gaps(level_list)
+    local max_gap = 2
+
+    max_gap = max_gap + int(#level_list / 20)
+
+    if OB_CONFIG.weapons == "very_late" then max_gap = max_gap + 2 end
+    if OB_CONFIG.weapons == "later"     then max_gap = max_gap + 1 end
+
+    if OB_CONFIG.weapons == "sooner"    then max_gap = 1 end
+    if OB_CONFIG.weapons == "very_soon" then max_gap = 1 end
+
+    for start = 1, #level_list do
+      local gap = detect_a_weapon_gap(level_list, start)
+
+      -- lesser gaps near start
+      local max_gap2 = max_gap
+      if max_gap2 >= 2 and start <= 4 then
+         max_gap2 = max_gap2 - 1
+      end
+
+      while gap > max_gap2 do
+        shift_new_weapons_down(level_list, start + 1)
+        gap = gap - 1
+      end
+    end
+  end
+
+
+  local function check_upgraded_weapons()
     -- ensure certain weapon pairs occur in the expected order
     -- [ e.g. regular shotgun comes before the super-shotgun ]
 
@@ -1077,17 +1261,55 @@ function Episode_plan_weapons()
   end
 
 
-  local function calc_max_level(LEV)
-    local max_level = 1
+  local function place_new_weapons()
+    local level_list = {}
+
+    each LEV in GAME.levels do
+      LEV.new_weapons = {}
+
+      if LEV.prebuilt  then continue end
+      if LEV.is_secret then continue end
+
+      table.insert(level_list, LEV)
+    end
+
+    assert(#level_list >= 1)
+
+    each name,info in GAME.WEAPONS do
+      -- skip non-item and disabled weapons
+      if (info.add_prob or 0) == 0 then continue end
+
+      local LEV = calc_new_weapon_place(info, level_list)
+      assert(LEV)
+
+      table.insert(LEV.new_weapons, name)
+      rand.shuffle(LEV.new_weapons)
+    end
+
+    spread_new_weapons(level_list)
+
+    check_new_weapon_at_start()
+
+    check_upgraded_weapons()
+
+    reduce_weapon_gaps(level_list)
+
+--  stderrf("%s\n", summarize_new_weapon_placement())
+  end
+
+
+  local function calc_max_damage(LEV)
+    local max_damage = 5
 
     each name,_ in LEV.seen_weapons do
       local info = GAME.WEAPONS[name]
-      local level = info.level or 1
 
-      max_level = math.max(max_level, level)
+      local W_damage = info.rate * info.damage
+
+      max_damage = math.max(max_damage, W_damage)
     end
 
-    LEV.max_weapon = max_level
+    LEV.weap_max_damage = max_damage
   end
 
 
@@ -1103,7 +1325,7 @@ function Episode_plan_weapons()
         seen_weapons[name] = true
       end
 
-      calc_max_level(LEV)
+      calc_max_damage(LEV)
     end
   end
 
@@ -1138,7 +1360,7 @@ function Episode_plan_weapons()
       local NL = next_level_in_episode(_index)
       local PL = next_next_level(_index)
 
-      -- build up a probability table 
+      -- build up a probability table
       local tab = {}
 
       if NL then each name in NL.new_weapons do tab[name] = 200 end end
@@ -1196,7 +1418,7 @@ function Episode_plan_weapons()
 
 
   local function decide_weapon(LEV, is_start, last_ones)
-    -- determine probabilities 
+    -- determine probabilities
     local tab = {}
 
     each name,info in GAME.WEAPONS do
@@ -1218,7 +1440,7 @@ function Episode_plan_weapons()
 
 
   local function pick_start_weapons()
-    -- decide how many we want, either 1 or 2.
+    -- decide how many we want, either 1, 2 or 3.
     -- should be more in later levels.
 
     local prev_ones
@@ -1226,11 +1448,15 @@ function Episode_plan_weapons()
     each LEV in GAME.levels do
       LEV.start_weapons = {}
 
-      local extra_prob = 10 + math.min(1, LEV.game_along) * 80
+      local want_num = 1
 
-      local want_num = rand.sel(extra_prob, 2, 1)
+      local extra_prob1 = 15 + 85 * math.clamp(0, LEV.game_along, 1)
+      local extra_prob2 =  5 + 45 * math.clamp(0, LEV.game_along, 1)
 
-      -- in very first few maps, only give a single weapon
+      if rand.odds(extra_prob1) then want_num = want_num + 1 end
+      if rand.odds(extra_prob2) then want_num = want_num + 1 end
+
+      -- in very first few maps, only give a single start weapon
       if (LEV.id <= 2 or LEV.game_along < 0.2) and LEV.new_weapons[1] then
         want_num = 1
       end
@@ -1238,6 +1464,20 @@ function Episode_plan_weapons()
       if want_num > LEV.weapon_quota then
          want_num = LEV.weapon_quota
       end
+
+--[[
+      -- skip one sometimes
+      -- [ but never in the first few maps ]
+      local skip_prob = 1
+
+      if OB_CONFIG.weapons == "very_late" then skip_prob = 40 end
+      if OB_CONFIG.weapons == "later"     then skip_prob = 20 end
+      if OB_CONFIG.weapons == "normal"    then skip_prob = 10 end
+
+      if LEV.id >= 3 and LEV.ep_along >= 0.2 and rand.odds(skip_prob) then
+        want_num = want_num - 1
+      end
+--]]
 
       for i = 1, want_num do
         local name = decide_weapon(LEV, "is_start", prev_ones)
@@ -1285,12 +1525,11 @@ function Episode_plan_weapons()
   ---| Episode_plan_weapons |---
 
   each LEV in GAME.levels do
-    calc_weapon_level(LEV)
     calc_weapon_quota(LEV)
   end
 
-  pick_new_weapons()
-  
+  place_new_weapons()
+
   determine_seen_weapons()
 
   pick_secret_weapons()
@@ -1521,7 +1760,7 @@ function Hub_assign_pieces(epi, pieces)
     L.hub_piece = piece
 
     gui.debugf("Hub: assigning piece '%s' --> %s\n", piece, L.name)
-  end 
+  end
 end
 
 
@@ -1572,6 +1811,8 @@ end
 function Level_choose_themes()
   local theme_tab = {}
 
+  local do_mostly = false
+
 
   local function collect_mixed_themes()
     each name,info in OB_THEMES do
@@ -1586,7 +1827,9 @@ function Level_choose_themes()
   end
 
 
-  local function set_level_theme(LEV, name)
+  local function set_a_theme(LEV, name)
+    assert(name)
+
     -- don't overwrite theme of special levels
     if LEV.theme_name then
       name = LEV.theme_name
@@ -1613,141 +1856,171 @@ function Level_choose_themes()
   end
 
 
-  local function set_single_theme(name)
-    each LEV in GAME.levels do
-      set_level_theme(LEV, name)
+  local function decide_mixins(EPI, main_theme, mixins)
+    if not theme_tab[main_theme] then
+      error("Broken code handling mostly_xxx themes")
+    end
+
+    local new_tab = table.copy(theme_tab)
+
+    new_tab[main_theme] = nil
+
+    if table.empty(new_tab) then return end
+
+    local pos = rand.pick({ 3,4,4,5 })
+
+    while pos <= #EPI.levels do
+      local LEV = EPI.levels[pos]
+
+      mixins[LEV.name] = rand.key_by_probs(new_tab)
+
+      pos = pos + rand.pick({ 3,4 })
     end
   end
 
 
-  local function set_jumbled_themes()
-    each LEV in GAME.levels do
-      set_level_theme(LEV, rand.key_by_probs(theme_tab))
+  local function grow_episode_list(list)
+    if #list == 1 then
+      table.insert(list, list[1])
+      table.insert(list, list[1])
     end
+
+    if #list == 2 then
+      local dist = rand.sel(70, 0, 1)
+      table.insert(list, list[1 + dist])
+      table.insert(list, list[2 - dist])
+    end
+
+    assert(#list >= 3)
+
+    -- concatenate a shuffled copy of the list, doubling its size
+    local shuffled = table.copy(list)
+
+    rand.shuffle(shuffled)
+
+    table.append(list, shuffled)
   end
 
 
-  local function set_mostly_a_theme(theme)
-    if not theme_tab[theme] then
-      error("Broken mostly_" .. theme .." theme")
-    end
+  local function create_episode_list(want_num)
+    local list = {}
 
-    theme_tab[theme] = nil
-
-    local last_same = 0
-    local last_diff = 99  -- force first map to be desired theme
-
-    local max_same = 3
-    local max_diff = 1
-
-    if OB_CONFIG.length == "game" then
-      max_same = 5
-      max_diff = 2
-    end
-
-    each LEV in GAME.levels do
-      local what
-
-      if last_diff >= max_diff then
-        what = theme
-      elseif (last_same < max_same) and rand.odds(65) then
-        what = theme
-      else
-        what = rand.key_by_probs(theme_tab)
-      end
-
-      set_level_theme(LEV, what)
-
-      if what == theme then
-        last_same = last_same + 1
-        last_diff = 0
-      else
-        last_diff = last_diff + 1
-        last_same = 0
-      end
-    end
-  end
-
-
-  local function batched_episodic_themes(episode_list)
-    local pos = 1
-    local count = 0
-
-    each LEV in GAME.levels do
-      if count >= 4 or (count >= 2 and rand.odds(50)) then
-        pos = pos + 1
-        count = 0
-      end
-
-      set_level_theme(LEV, episode_list[pos])
-      count = count + 1
-    end
-  end
-
-
-  local function set_themes_by_episode(episode_list)
-    each LEV in GAME.levels do
-      set_level_theme(LEV, episode_list[LEV.episode.id])
-    end
-  end
-
-
-  local function create_episode_list(total)
-    local episode_list = {}
-
-    local tab = table.copy(theme_tab)
+    local tab   = table.copy(theme_tab)
+    local total = table.size(theme_tab)
 
     while not table.empty(tab) do
       local name = rand.key_by_probs(tab)
       tab[name] = nil
 
+      table.insert(list, name)
+    end
+
+    gui.debugf("Initial episode list = \n%s\n", table.tostr(list))
+
+    -- grow list until it is large enough
+    while #list < want_num do
+      grow_episode_list(list)
+    end
+
+    gui.debugf("Grown episode list = \n%s\n", table.tostr(list))
+
+    return list
+  end
+
+
+  local function set_an_episode(EPI, name)
+    local mixins = {}
+
+    if do_mostly then
+      decide_mixins(EPI, name, mixins)
+    end
+
+    each LEV in EPI.levels do
+      set_a_theme(LEV, mixins[LEV.name] or name)
+    end
+  end
+
+
+  local function set_single_theme(name)
+    each EPI in GAME.episodes do
+      set_an_episode(EPI, name)
+    end
+  end
+
+
+  local function set_jumbled_themes()
+    local last_theme
+
+    each LEV in GAME.levels do
+      local tab = table.copy(theme_tab)
+
+      -- prefer a different theme than the last one
+      if last_theme then
+        tab[last_theme] = tab[last_theme] / 10
+      end
+
+      last_theme = rand.key_by_probs(tab)
+
+      set_a_theme(LEV, last_theme)
+    end
+  end
+
+
+  local function set_original_themes()
+    each EPI in GAME.episodes do
+      if not EPI.theme then
+        error("Broken episode def : missing 'theme' field")
+      end
+
+      set_an_episode(EPI, EPI.theme)
+    end
+  end
+
+
+  local function set_episodic_themes()
+    local num_eps = #GAME.episodes
+
+    local episode_list = create_episode_list(num_eps)
+
+    each EPI in GAME.episodes do
+      set_an_episode(EPI, episode_list[EPI.id])
+    end
+  end
+
+
+  local function set_bit_mixed_themes()
+    -----------------------   1   2   3   4
+    local BIT_MIXED_PROBS = { 0, 30, 60, 40 }
+
+    local num_levels = #GAME.levels
+
+    local episode_list = create_episode_list(num_levels)
+
+    local pos = 1
+
+    while pos <= num_levels do
+      local name = table.remove(episode_list, 1)
+      assert(name)
+
       local info = OB_THEMES[name]
-      local pos = rand.irange(1, total)
 
-      if OB_CONFIG.theme == "original" then
-        each epi in GAME.episodes do
-          if name == epi.theme and not episode_list[_index] then
-            -- this can leave gaps, but they are filled later
-            pos = _index ; break
-          end
-        end
+      local length = rand.index_by_probs(BIT_MIXED_PROBS)
+
+      if info.bit_limited then
+        length = 1
       end
 
-      if episode_list[pos] then
-        pos = table.find_unused(episode_list)
-      end
+      for i = 1, length do
+        local LEV = GAME.levels[pos]
+        set_a_theme(LEV, name)
 
-      episode_list[pos] = name 
+        pos = pos + 1
+
+        if pos > num_levels then break; end
+      end
     end
-
-    gui.debugf("Initial theme list = \n%s\n", table.tostr(episode_list))
-
-    -- fill any gaps when in "As Original" mode
-    if OB_CONFIG.theme == "original" then
-      each epi in GAME.episodes do
-        if not episode_list[_index] then
-          episode_list[_index] = epi.theme
-        end
-      end
-
-      assert(# episode_list == total)
-    end
-
-    return episode_list
   end
 
-
-  local function flesh_out_episodes(episode_list, total)
-    if total == 2 then
-      local dist = rand.sel(70, 0, 1)
-      table.insert(episode_list, episode_list[1 + dist])
-      table.insert(episode_list, episode_list[2 - dist])
-    end
-
-    while #episode_list < 90 do
-      table.insert(episode_list, episode_list[rand.irange(1, total)])
-    end
-  end
 
 
   ---| Level_choose_themes |---
@@ -1758,49 +2031,44 @@ function Level_choose_themes()
   collect_mixed_themes()
 
 
-  local mostly_theme = string.match(OB_CONFIG.theme, "mostly_(%w+)")
+  local theme = OB_CONFIG.theme
 
-  -- the user can specify the main theme
-  if OB_CONFIG.theme != "mixed"    and OB_CONFIG.theme != "jumble" and
-     OB_CONFIG.theme != "original" and not mostly_theme
-  then
-    set_single_theme(OB_CONFIG.theme)
-    return
+  -- extract the part after the "mostly_" prefix
+  local mostly_theme = string.match(theme, "mostly_(%w+)")
+
+  if mostly_theme then
+    do_mostly = true
+    theme = mostly_theme
   end
 
 
+  -- As Original : follow the original game
+  if theme == "original" then
+    set_original_themes()
+    return
+  end
+
+  -- Episodic : each episode is a single (random) theme
+  if theme == "epi" then
+    set_episodic_themes()
+    return
+  end
+
+  -- Bit Mixed : theme changes every 3-4 maps or so
+  if theme == "bit_mixed" then
+    set_bit_mixed_themes()
+    return
+  end
+
   -- Jumbled Up : every level is purely random
-  if OB_CONFIG.theme == "jumble" then
+  if theme == "jumble" then
     set_jumbled_themes()
     return
   end
 
-  if mostly_theme then
-    set_mostly_a_theme(mostly_theme)
-    return
-  end
 
-
-  local total = table.size(theme_tab)
-
-  if OB_CONFIG.theme == "original" then
-    total = math.max(total, #GAME.episodes)
-  end
-
-  local episode_list = create_episode_list(total)
-
-  gui.printf("Theme for episodes =\n%s\n", table.tostr(episode_list))
-
-
-  flesh_out_episodes(episode_list, total)
-
-  -- single episode is different : have a few small batches
-  if OB_CONFIG.length == "episode" then
-    batched_episodic_themes(episode_list)
-    return
-  end
-
-  set_themes_by_episode(episode_list)
+  -- the user has specified the main theme
+  set_single_theme(theme)
 end
 
 
@@ -1808,12 +2076,7 @@ end
 function Level_do_styles()
   local style_tab = table.copy(GLOBAL_STYLE_LIST)
 
-  -- adjust styles for Co-operative multiplayer
-  if OB_CONFIG.mode == "coop" then
-    style_tab.cycles = { some=30, heaps=50 }
-  end
-
-  -- per game, per level and per theme style_lists
+  -- game, level and theme specific style_lists
   if GAME.STYLE_LIST then
     table.merge(style_tab, GAME.STYLE_LIST)
   end
@@ -1831,17 +2094,11 @@ function Level_do_styles()
     STYLE[name] = rand.key_by_probs(prob_tab)
   end
 
-  -- GUI overrides...
-  each name in { "outdoors", "caves", "traps" } do
+  -- apply user settings
+  each name,_ in GLOBAL_STYLE_LIST do
     if OB_CONFIG[name] and OB_CONFIG[name] != "mixed" then
       STYLE[name] = OB_CONFIG[name]
     end
-  end
-
-  -- no traps/cages in DM or CTF maps
-  if OB_CONFIG.mode == "dm" or OB_CONFIG.mode == "ctf" then
-    STYLE.traps = "none"
-    STYLE.cages = "none"
   end
 
   -- if level needs a secret exit, make lots of secrets
@@ -1875,7 +2132,7 @@ function Level_choose_liquid()
 
   -- allow liquids, but control how much we use
   LEVEL.liquid_usage = usage
-  
+
   -- pick the liquid to use
   local name = rand.key_by_probs(THEME.liquids)
   local liquid = GAME.LIQUIDS[name]
@@ -1905,7 +2162,7 @@ function Level_choose_darkness()
     prob = style_sel("darkness", 0, 10, 30, 90)
   end
 
-  LEVEL.sky_light  = rand.pick({ 160, 176,176, 192,192 })
+  LEVEL.sky_light  = rand.pick({ 176,192,192,208 })
   LEVEL.sky_shadow = 32
 
   if rand.odds(prob) then
@@ -1940,7 +2197,7 @@ end
 function Level_build_it()
   Level_init()
 
-  Seed_init(LEVEL.map_W, LEVEL.map_H)
+  Seed_init()
 
   Area_create_rooms()
     if gui.abort() then return "abort" end

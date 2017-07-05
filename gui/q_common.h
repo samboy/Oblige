@@ -1,10 +1,10 @@
 //------------------------------------------------------------------------
-//  BSP files - Quake I and II
+//  BSP files - Quake I, II and III
 //------------------------------------------------------------------------
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2009 Andrew Apted
+//  Copyright (C) 2006-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -57,6 +57,8 @@ public:
 	void Append(qLump_c *other);
 
 	void Prepend(const void *data, u32_t len);
+
+	void AddByte(byte value);
 
 	void Printf (const char *str, ...);
 	void KeyPair(const char *key, const char *val, ...);
@@ -125,6 +127,11 @@ void QCOM_Fix_T_Junctions();
 #define Q2_BSP_VERSION   38
 #define Q2_IDENT_MAGIC   "IBSP"
 
+#define Q3_HEADER_LUMPS  17
+#define Q3_BSP_VERSION   46
+#define Q3_IDENT_MAGIC   "IBSP"
+
+
 typedef struct
 {
 	u32_t start;
@@ -142,11 +149,21 @@ typedef struct
 typedef struct
 {
 	char   ident[4];
-	s32_t  version;  
+	s32_t  version;
 
 	lump_t lumps[Q2_HEADER_LUMPS];
 
 } PACKEDATTR dheader2_t;
+
+typedef struct
+{
+	char   ident[4];
+	s32_t  version;
+
+	lump_t lumps[Q3_HEADER_LUMPS];
+
+} PACKEDATTR dheader3_t;
+
 
 
 typedef struct
@@ -167,9 +184,19 @@ typedef struct
 {
 	float normal[3];
 	float dist;
-	s32_t type; // PLANE_X - PLANE_ANYZ 
+	s32_t type; // PLANE_X - PLANE_ANYZ
 
 } PACKEDATTR dplane_t;
+
+// Quake 3 format
+typedef struct
+{
+	float	normal[3];
+	float	dist;
+
+} PACKEDATTR dplane3_t;
+
+
 
 // 0-2 are axial planes
 #define PLANE_X      0

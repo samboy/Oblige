@@ -4,7 +4,7 @@
 --
 --  Oblige Level Maker
 --
---  Copyright (C) 2008,2016 Andrew Apted
+--  Copyright (C) 2008-2016  Andrew Apted
 --
 --  This program is free software; you can redistribute it and/or
 --  modify it under the terms of the GNU General Public License
@@ -18,13 +18,26 @@
 --
 ----------------------------------------------------------------
 
-BOOM = { }
+BOOM = {}
+
 
 BOOM.ENTITIES =
 {
-  point_push = { id=5001, kind="scenery", r=16,h=16, pass=true }
-  point_pull = { id=5002, kind="scenery", r=16,h=16, pass=true }
+  boom_player5 = { id=4001, r=16, h=56 }
+  boom_player6 = { id=4002, r=16, h=56 }
+  boom_player7 = { id=4003, r=16, h=56 }
+  boom_player8 = { id=4004, r=16, h=56 }
+
+  -- CTF things
+  ctf_blue_flag  = { id=5130, r=16, h=56, pass=true }
+  ctf_blue_start = { id=5080, r=16, h=56, pass=true }
+  ctf_red_flag   = { id=5131, r=16, h=56, pass=true }
+  ctf_red_start  = { id=5081, r=16, h=56, pass=true }
+
+  point_push = { id=5001, r=16,h=16, pass=true }
+  point_pull = { id=5002, r=16,h=16, pass=true }
 }
+
 
 BOOM.PARAMETERS =
 {
@@ -42,15 +55,34 @@ function BOOM.create_dehacked()
     "#\n\n"
   }
 
+  local strings_marker = false;
+
+  local function add_string(id, text)
+    if not strings_marker then
+      table.insert(data, "[STRINGS]\n")
+      strings_marker = true
+    end
+
+    -- escape any newlines in the text
+    text = string.gsub(text, "\n", "\\n")
+
+    table.insert(data, string.format("%s = %s\n", id, text))
+  end
+
+
+
   --- monster stuff ---
 
-  table.insert(data, "Thing 20 (Spiderdemon)\n")
-  table.insert(data, "Width = 5242880\n")
-  table.insert(data, "\n")
+  -- honor the "Smaller Mastermind" module, use the DEHACKED lump to
+  -- reduce the size of the Spider Mastermind monster from 128 to 80
+  -- units so that she fits more reliably on maps.
+  if PARAM.small_spiderdemon then
+    table.insert(data, "Thing 20 (Spiderdemon)\n")
+    table.insert(data, "Width = 5242880\n")  -- 80 units
+    table.insert(data, "\n")
+  end
 
   --- level names ---
-
-  local strings_marker = false;
 
   each L in GAME.levels do
     local prefix = PARAM.bex_map_prefix
@@ -74,17 +106,29 @@ function BOOM.create_dehacked()
 
       local text = L.name .. ": " .. L.description;
 
-      if not strings_marker then
-        table.insert(data, "[STRINGS]\n")
-        strings_marker = true
-      end
-
-      table.insert(data, string.format("%s = %s\n", id, text))
+      add_string(id, text)
     end
   end -- for L
 
-  table.insert(data, "\n");
+  --- episode texts ---
 
+  each EPI in GAME.episodes do
+    if EPI.mid_text and EPI.bex_mid_name then
+      add_string(EPI.bex_mid_name, EPI.mid_text)
+    end
+    if EPI.end_text and EPI.bex_end_name then
+      add_string(EPI.bex_end_name, EPI.end_text)
+    end
+  end
+
+  if GAME.secret_text and PARAM.bex_secret_name then
+    add_string(PARAM.bex_secret_name, GAME.secret_text)
+  end
+  if GAME.secret2_text and PARAM.bex_secret2_name then
+    add_string(PARAM.bex_secret2_name, GAME.secret2_text)
+  end
+
+  table.insert(data, "\n");
 
   --- music replacement ---
 
@@ -98,12 +142,12 @@ end
 
 
 function BOOM.setup()
-  -- for BOOM-compatible ports, reduce the size of the Spider Mastermind
-  -- boss from 128 to 80 units (via DEHACKED lump) so that she fits more
-  -- reliably on maps.
-  local info = GAME.MONSTERS["Spiderdemon"]
-  if info then
-    info.r = 80
+  -- honor the "Smaller Mastermind" module
+  if PARAM.small_spiderdemon then
+    local info = GAME.MONSTERS["Spiderdemon"]
+    if info and info.r > 80 then
+      info.r = 80
+    end
   end
 end
 
@@ -122,7 +166,7 @@ OB_ENGINES["boom"] =
 
   priority = 99  -- this makes it top-most, and the default engine
 
-  game = { doom1=1, doom2=1 }
+  game = "doomish"
 
   tables =
   {

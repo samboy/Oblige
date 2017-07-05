@@ -39,7 +39,7 @@ h2 {
 h3 { color: #c44; padding-top: 1em; }
 
 .menu {
-    background-color: #554637;
+    background-color: #744a20;
     color: #ddd;
     min-height: 28px;
     line-height: 2.0em;
@@ -111,6 +111,10 @@ PRE { /* font-size: larger; */ }
 .shot_area { text-align: center; }
 
 .screenshot { padding: 16px; margin: 0px; border: 0px solid black; }
+
+.menuinfo li {
+    margin-bottom: 1em;
+}
 
 .qsavetex li {
     color: #444;

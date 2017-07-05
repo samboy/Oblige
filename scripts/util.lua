@@ -4,7 +4,7 @@
 --
 --  Oblige Level Maker
 --
---  Copyright (C) 2006-2016 Andrew Apted
+--  Copyright (C) 2006-2017 Andrew Apted
 --
 --  This program is free software; you can redistribute it and/or
 --  modify it under the terms of the GNU General Public License
@@ -158,6 +158,21 @@ function string.is_digit(ch)
          ch == '6' or ch == '7' or ch == '8' or
          ch == '9'
 end
+
+function string.tokenize(text)
+  -- returns a list of words
+  local words = {}
+
+--##  text = " " .. text .. " "
+--##  text = string.gsub(text, "%s%s+", " ")
+
+  for w in string.gmatch(text, "(%S+)") do
+    table.insert(words, w)
+  end
+
+  return words
+end
+
 
 function style_sel(name, v_none, v_few, v_some, v_heaps)
   local keyword = STYLE[name]
@@ -343,6 +358,8 @@ function table.tostr(t, depth, prefix)
     result = result .. prefix .. "  " .. tostring(k) .. " = "
     if type(v) == "table" and depth > 1 then
       result = result .. table.tostr(v, depth-1, prefix .. "  ")
+    elseif type(v) == "table" and v.name then
+      result = result .. v.name
     else
       result = result .. tostring(v)
     end
@@ -491,7 +508,11 @@ function table.expand_templates(t)
     if sub.template then
       local orig = t[sub.template]
 
-      if not orig then
+      if orig == nil then
+        orig = TEMPLATES[sub.template]
+      end
+
+      if orig == nil then
         error("Missing template: " .. tostring(sub.template) .. " in: " .. name)
       end
 
@@ -525,6 +546,10 @@ table.INHERIT_META =
 {
   __index = function(t, k)
     if t.__parent then return t.__parent[k] end
+  end,
+
+  __tostring = function(t)
+    return t.name or tostring(t)
   end
 }
 
@@ -720,7 +745,7 @@ function geom.along_dist(x, y, sx,sy, ex,ey)
   y = y - sy ; ey = ey - sy
 
   local len = math.sqrt(ex*ex + ey*ey)
-  
+
   if len < 0.001 then
     error("perp_dist: zero-length line")
   end
@@ -1030,7 +1055,7 @@ function geom.categorize_shape(dir2, dir4, dir6, dir8)
   -- straight through
   if open_str == "28" then return 'I', 2 end
   if open_str == "46" then return 'I', 4 end
-  
+
   -- two-way junction (L shape)
   if open_str == "24" then return 'L', 2, 4 end
   if open_str == "26" then return 'L', 2, 6 end
@@ -1102,7 +1127,7 @@ function geom.bezier_length(S, C, E, divisions)
 
     cx, cy = nx, ny
   end
-  
+
   return length
 end
 
@@ -1112,12 +1137,16 @@ end
 
 
 --
--- Find path from start (sx,sy) to end (ex,ey).
--- The returned path includes the start but not the end.
+-- Find path from start (sx,sy) to end (ex,ey), inside a
+-- rectangle of size WxH cells.
+--
+-- The returned path consists of (x,y,dir) triples, and
+-- includes the start but not the end.
+--
 -- Returns NIL if no path can be found.
 --
 -- Score function:
---   f(x, y, dir, data) --> distance, negative for impossible
+--   f(x, y, dir, data) --> distance, negative when blocked
 --
 function astar_find_path(sx, sy, ex, ey, W, H, score_func, data)
   local open   = table.array_2D(W, H)
@@ -1130,7 +1159,7 @@ function astar_find_path(sx, sy, ex, ey, W, H, score_func, data)
     return geom.dist(x, y, ex, ey)
   end
 
-  function lowest_F()  -- brute force search (SLOW!)
+  local function lowest_F()  -- brute force search (SLOW!)
     local rx, ry
     local best_F = 9e20
 

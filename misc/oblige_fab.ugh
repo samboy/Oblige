@@ -5,6 +5,9 @@
 # turn off generalized sectors (they prevent large sector types)
 feature gen_types 0
 
+# disable the check for players in the map
+feature no_need_players 1
+
 
 #--- TEXTURES and FLATS ---
 
@@ -16,6 +19,7 @@ texture o _OUTER
 texture o _FLOOR
 texture o _FLOOR2
 texture o _CEIL
+texture o _CEIL2
 texture o _LIQUID
 texture o _SKY
 
@@ -25,6 +29,7 @@ flat o _OUTER
 flat o _FLOOR
 flat o _FLOOR2
 flat o _CEIL
+flat o _CEIL2
 flat o _LIQUID
 flat o _SKY
 
@@ -39,6 +44,7 @@ line 991 o "-- OBL: Lower Unpeg"
 #--- SECTOR SPECIALS ---
 
 sector 988 "OBL: Depot Peer"
+sector 987 "OBL: Light Brush"
 sector 992 "OBL: Reachable"
 sector 993 "OBL: Grab Floor"
 sector 995 "OBL: Moving Floor"
@@ -68,6 +74,12 @@ thing 8123 n -  32 NULL "OBL: Caged 64"
 thing 8124 n -  48 NULL "OBL: Caged 96"
 thing 8126 n -  64 NULL "OBL: Caged 128"
 thing 8128 n - 128 NULL "OBL: Caged 256"
+
+thing 8132 n -  20 NULL "OBL: Trap 40"
+thing 8133 n -  32 NULL "OBL: Trap 64"
+thing 8134 n -  48 NULL "OBL: Trap 96"
+thing 8136 n -  64 NULL "OBL: Trap 128"
+thing 8138 n - 128 NULL "OBL: Trap 256"
 
 thing 8151 o n  16 NULL "OBL: Small Item"
 thing 8152 o n  16 NULL "OBL: Nice Item"

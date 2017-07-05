@@ -215,8 +215,8 @@ OB_MODULES["zdoom_marines"] =
 {
   label = _("ZDoom Marines")
 
-  game = { doom1=1, doom2=1 }
-  playmode = { sp=1, coop=1 }
+  game = "doomish"
+
   engine = { zdoom=1, gzdoom=1, skulltag=1 }
 
   tables =
@@ -289,9 +289,9 @@ end
 
 OB_MODULES["zdoom_marine_control"] =
 {
-  label = _("ZDoom Marines : Fine Control")
+  label = _("ZDoom Marines : Control")
 
-  mod = "zdoom_marines"
+  module = "zdoom_marines"
 
   hooks =
   {
@@ -305,7 +305,7 @@ OB_MODULES["zdoom_marine_control"] =
     marine_saw       = { label="Chainsaw Marine",    choices=ZDOOM_MARINE.CTL_CHOICES }
     marine_pistol    = { label="Pistol Marine",      choices=ZDOOM_MARINE.CTL_CHOICES }
     marine_shotty    = { label="Shotgun Marine",     choices=ZDOOM_MARINE.CTL_CHOICES }
-    marine_ssg       = { label="Super Shotgunner",   choices=ZDOOM_MARINE.CTL_CHOICES }
+    marine_ssg       = { label="SSG Marine",         choices=ZDOOM_MARINE.CTL_CHOICES }
     marine_chain     = { label="Chaingun Marine",    choices=ZDOOM_MARINE.CTL_CHOICES }
     marine_rocket    = { label="Rocket Marine",      choices=ZDOOM_MARINE.CTL_CHOICES }
     marine_plasma    = { label="Plasma Marine",      choices=ZDOOM_MARINE.CTL_CHOICES }

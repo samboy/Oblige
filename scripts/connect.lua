@@ -4,7 +4,7 @@
 --
 --  Oblige Level Maker
 --
---  Copyright (C) 2006-2016 Andrew Apted
+--  Copyright (C) 2006-2017 Andrew Apted
 --
 --  This program is free software; you can redistribute it and/or
 --  modify it under the terms of the GNU General Public License
@@ -21,19 +21,24 @@
 
 --class CONN
 --[[
-    kind : keyword  -- "edge", "joiner", "teleporter"
-
-    lock : LOCK
-
-    is_secret : boolean
-
-    id : number  -- debugging aid
-
+    --
+    -- A connection between two rooms.
+    --
     -- The two rooms are the vital (compulsory) information,
     -- especially for the quest system.
     --
     -- For teleporters the edge and area info will be absent.
-    -- For joiners, the edges are NOT peered.
+    -- For joiners, neither A1 and A2 are the actual joiner and
+    -- the edges are NOT peered.
+    --
+
+    id, name   -- debugging aids
+
+    kind : keyword  -- "edge", "joiner", "terminator", "teleporter"
+
+    lock : LOCK
+
+    is_secret : boolean
 
     R1 : source ROOM
     R2 : destination ROOM
@@ -44,13 +49,32 @@
     A1 : source AREA
     A2 : destination AREA
 
-    F1, F2 : EDGE  -- for "split" connections, the other side
+    joiner_chunk : CHUNK
 
     door_h : floor height for doors straddling the connection
-
-    backwards : true if travel from R2 --> R1
 --]]
 
+
+--class LOCK
+--[[
+    --
+    -- A lock marks when something (mainly connections) is locked
+    -- and requires some goal (like a key) to open it.
+    -- In other words, an "obstacle" with an external solution.
+    --
+
+    id, name   -- debugging aids
+
+    kind : keyword  -- "quest" (significant goal)
+                    -- "intraroom" (a barred exit)
+                    -- "itemlock" (e.g. lowering pedestal)
+
+    conn : CONN     -- connection which is locked
+    item : CHUNK    -- item chunk which is locked
+
+    goals : list(GOAL)  -- the goal(s) which solve the lock
+                        -- [ only used with "quest" kind ]
+--]]
 
 
 CONN_CLASS = {}
@@ -78,7 +102,7 @@ end
 function CONN_CLASS.kill_it(C)
   table.remove(LEVEL.conns, C)
 
-  C.name = "DEAD_CONN"
+  C.name = "DEAD_" .. C.name
   C.kind = "DEAD"
   C.id   = -1
 
@@ -88,45 +112,101 @@ function CONN_CLASS.kill_it(C)
 end
 
 
-function CONN_CLASS.tostr(C)
-  return assert(C.name)
+function CONN_CLASS.dump(C)
+  gui.debugf("Connect object %s:  kind:%s\n", C.name, C.kind)
+  gui.debugf("  Rooms: %s --> %s\n", C.R1.name, C.R2.name)
+
+  if C.lock then
+    gui.debugf("  Locked: kind=%s goalnum=%s\n",
+      C.lock.kind or "<nil>",
+      tostring((C.lock.goals and #C.lock.goals) or "-"))
+  end
+
+  if C.A1 then
+    gui.debugf("  Areas: %s in %s --> %s in %s\n",
+        C.A1.name, C.A1.room.name, C.A2.name, C.A2.room.name)
+  end
+
+  if C.E1 then
+    gui.debugf("  Edge 1 @ %s dir:%d long:%d\n", C.E1.S.name, C.E1.dir, C.E1.long)
+    gui.debugf("  Edge 2 @ %s dir:%d long:%d\n", C.E2.S.name, C.E2.dir, C.E2.long)
+  end
 end
 
 
 function CONN_CLASS.other_area(C, A)
-  if A == C.A1 then
-    return C.A2
-  else
-    return C.A1
-  end
+  if A == C.A1 then return C.A2 end
+  if A == C.A2 then return C.A1 end
+
+  error("wrong area for CONN_CLASS.other_area")
 end
 
 
 function CONN_CLASS.other_room(C, R)
-  if R == C.R1 then
-    return C.R2
-  else
-    return C.R1
-  end
+  if R == C.R1 then return C.R2 end
+  if R == C.R2 then return C.R1 end
+
+  error("wrong room for CONN_CLASS.other_room")
 end
 
 
---[[
 function CONN_CLASS.edge_for_room(C, R)
-  if R == C.R1 then
-    return C.E1
+  if R == C.R1 then return C.E1, C.F1 end
+  if R == C.R2 then return C.E2, C.F2 end
+
+  error("wrong room for CONN_CLASS.edge_for_room")
+end
+
+
+function CONN_CLASS.get_lock_reqs(C, reqs)
+  if C.is_secret then
+    reqs.key = "secret"
+    return
+  end
+
+  if not C.lock then return end
+
+  if C.lock.kind == "intraroom" then
+    reqs.key = "barred"
+
+  elseif #C.lock.goals == 2 then
+    error("Locked double")
+
+  elseif #C.lock.goals == 3 then
+    reqs.key = "k_ALL"
+
   else
-    return C.E2
+    reqs.key = C.lock.goals[1].item
   end
 end
---]]
+
+
+------------------------------------------------------------------------
+
+
+function Lock_new(kind, conn)
+  local LOCK =
+  {
+    id   = alloc_id("lock")
+    kind = kind
+    conn = conn
+  }
+
+  LOCK.name = "LOCK_" .. kind .. "_" .. LOCK.id
+
+  if conn then
+    conn.lock = LOCK
+  end
+
+  return LOCK
+end
 
 
 ------------------------------------------------------------------------
 
 
 function Connect_directly(P)
-  local kind = P.kind or "edge"
+  local kind = P.kind
 
   gui.debugf("Connection: %s --> %s (via %s)\n", P.R1.name, P.R2.name, kind)
 
@@ -135,138 +215,120 @@ function Connect_directly(P)
   table.insert(C.R1.conns, C)
   table.insert(C.R2.conns, C)
 
-
   local S1   = P.S
   local long = P.long
 
-  if P.split then long = P.split end
+  local E1, E2
 
 
-  assert(kind != "teleporter")
+  if kind == "edge" then
 
-  if kind == "joiner" then
-    C.A1 = assert(P.A1)
-    C.A2 = assert(P.A2)
+    E1, E2 = Edge_new_pair("doorway", "nothing",  P.S, P.dir, long)
+
+  elseif kind == "joiner" then
 
     C.joiner_chunk = assert(P.chunk)
     C.joiner_chunk.conn = C
 
-    -- TODO : support other shapes
-    local E1 = Seed_create_chunk_edge(P.chunk, 10 - P.dir, "nothing")
-    local E2 = Seed_create_chunk_edge(P.chunk,      P.dir, "nothing")
+    local dir1 = assert(P.chunk.from_dir)
+    local dir2 = assert(P.chunk.dest_dir)
 
-    C.E1 = E1 ; E1.conn = C
-    C.E2 = E2 ; E2.conn = C
+    E1 = P.chunk:create_edge("nothing", dir1)
+    E2 = P.chunk:create_edge("nothing", dir2)
 
-  else  -- edge connection
+    -- TODO : this shape check is hacky, REVIEW THIS
+    if P.chunk.shape == "I" then
+      E1.is_wallish = true
+      E2.is_wallish = true
+    end
 
-    local E1, E2 = Seed_create_edge_pair(S1, P.dir, long, "nothing")
+  elseif kind == "terminator" then
 
-    E1.kind = "arch"
+    C.terminator_chunk = P.chunk
+    C.terminator_chunk.conn = C
 
-    C.E1 = E1 ; E1.conn = C
-    C.E2 = E2 ; E2.conn = C
+    -- terminator pieces always point INTO the hallway (from_dir goes OUT)
+    if C.R1.is_hallway then
+      P.chunk:flip()
+    end
 
-    C.A1 = assert(E1.S.area)
-    C.A2 = assert(E2.S.area)
+    local dir1 = assert(P.chunk.from_dir)
+    local dir2 = 10 - dir1  -- terminators are always "I" shape
+
+    E1, E2 = P.chunk:create_edge_pair("nothing", dir1)
+
+    if C.R1.is_hallway then
+      E1, E2 = E2, E1
+    end
+
+    E1.is_wallish = true
+    E2.is_wallish = true
+
+  else
+    error("Connect_directly: unknown kind: " .. tostring(P.kind))
   end
+
+  C.E1 = E1 ; E1.conn = C
+  C.E2 = E2 ; E2.conn = C
+
+  C.A1 = assert(E1.S.area)
+  C.A2 = assert(E2.S.area)
+
+  assert(C.A1.room == C.R1)
+  assert(C.A2.room == C.R2)
+
+  Edge_mark_walk(E1)
+  Edge_mark_walk(E2)
+
+--[[
+gui.debugf("E1.S = %s  dir = %d  area = %s\n", E1.S.name, E1.dir, E1.S.area.name)
+gui.debugf("E2.S = %s  dir = %d  area = %s\n", E2.S.name, E2.dir, E2.S.area.name)
+--]]
 
 --[[
 gui.debugf("Creating conn %s from %s --> %s\n", C.name, C.R1.name, C.R2.name)
 gui.debugf("  seed %s  dir:%d  long:%d\n", P.S.name, P.dir, P.long)
-gui.debugf("  area %s(%s) --> %s(%s)\n", C.A1.name, C.A1.mode, C.A2.name, C.A2.mode)
---]]
-
-
-  -- handle split connections
-  -- [ FIXME : broken, must be done a different way ]
---[[
-  if P.split then
-    assert(not S1.diagonal)
-    local S2 = S1:raw_neighbor(geom.RIGHT[P.dir], P.long - P.split)
-    assert(not S2.diagonal)
-
-    local F1, F2 = Seed_create_edge_pair(S2, P.dir, long, "nothing")
-
-    F1.kind = "arch"
-
-    C.F1 = F1 ; F1.conn = C
-    C.F2 = F2 ; F2.conn = C
-  end
+gui.debugf("  area %s(%s) of %s --> %s(%s) of %s\n",
+C.A1.name, C.A1.mode, C.A1.room.name,
+C.A2.name, C.A2.mode, C.A2.room.name)
 --]]
 end
 
 
 
-function Connect_teleporters()
+function Connect_teleporter_rooms(P)
+  local R1 = P.R1
+  local R2 = P.R2
 
-  local function eval_room(R)
-    -- never in hallways
-    if R.kind == "hallway" then return -1 end
+  gui.debugf("Teleporter connection: %s --> %s\n", R1.name, R2.name)
 
-    local score = R:usable_chunks() * 10
+  local C = CONN_CLASS.new("teleporter", R1, R2)
 
-    -- tie breaker
-    return score + gui.random() * 22
-  end
+  table.insert(C.R1.conns, C)
+  table.insert(C.R2.conns, C)
 
+  table.insert(C.R1.teleporters, C)
+  table.insert(C.R2.teleporters, C)
 
-  local function add_teleporter(R1, R2)
-    gui.debugf("Teleporter connection: %s --> %s\n", R1.name, R2.name)
+  -- setup tag information
+  C.tele_tag1 = alloc_id("tag")
+  C.tele_tag2 = alloc_id("tag")
 
-    local C = CONN_CLASS.new("teleporter", R1, R2)
-
-    table.insert(C.R1.conns, C)
-    table.insert(C.R2.conns, C)
-
-    table.insert(C.R1.teleporters, C)
-    table.insert(C.R2.teleporters, C)
-
-    -- setup tag information
-    C.tele_tag1 = alloc_id("tag")
-    C.tele_tag2 = alloc_id("tag")
-
-    R1.used_chunks = R1.used_chunks + 1
-    R2.used_chunks = R2.used_chunks + 1
-  end
+  R1.used_chunks = R1.used_chunks + 1
+  R2.used_chunks = R2.used_chunks + 1
+end
 
 
-  local function pick_room_in_trunk(trunk)
-    local best
-    local best_score
 
-    each R in trunk.rooms do
-      local score = eval_room(R)
+function Connect_finalize()
+  each P in LEVEL.prelim_conns do
+    assert(P.kind)
 
-      if score < 0 then continue end
-
-      if not best or score > best_score then
-        best = R
-        best_score = score
-      end
+    if P.kind == "teleporter" then
+      Connect_teleporter_rooms(P)
+    else
+      Connect_directly(P)
     end
-
-    return assert(best)
-  end
-
-
-  local function connect_trunks(trunk1, trunk2)
-    local R1 = pick_room_in_trunk(trunk1)
-    local R2 = pick_room_in_trunk(trunk2)
-
-    add_teleporter(R1, R2)
-  end
-
-
-  ---| Connect_teleporters |---
-
-  for i = 2, #LEVEL.trunks do
-    local k = rand.irange(1, i - 1)
-
-    local trunk1 = LEVEL.trunks[k]
-    local trunk2 = LEVEL.trunks[i]
-
-    connect_trunks(trunk1, trunk2)
   end
 end
 

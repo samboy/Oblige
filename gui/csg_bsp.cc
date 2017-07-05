@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2016 Andrew Apted
+//  Copyright (C) 2006-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -21,7 +21,6 @@
 #include "headers.h"
 #include "hdr_fltk.h"
 #include "hdr_lua.h"
-#include "hdr_ui.h"   // for mini map
 
 #include <algorithm>
 
@@ -38,10 +37,6 @@
 double QUANTIZE_GRID;
 
 static bool csg_is_clip_hull;
-
-static double mini_centre_x;
-static double mini_centre_y;
-static  float mini_scale;
 
 static std::vector<region_c*> dead_regions;
 
@@ -230,13 +225,11 @@ brush_vert_c * snag_c::FindOneSidedVert(double z)
 	{
 		brush_vert_c *V = sides[i];
 
-		if (! (V->parent->bkind == BKIND_Solid  || 
-					V->parent->bkind == BKIND_Detail ||
-					V->parent->bkind == BKIND_Sky))
+		if (! (V->parent->bkind == BKIND_Solid))
 			continue;
 
 		if (z > V->parent->b.z - Z_EPSILON &&
-				z < V->parent->t.z + Z_EPSILON)
+			z < V->parent->t.z + Z_EPSILON)
 			return V;
 	}
 
@@ -270,14 +263,14 @@ bool snag_c::IsTwoSided() const
 
 region_c::region_c() :
 	snags(), brushes(), entities(), gaps(),
-	liquid(NULL), degenerate(false),
+	degenerate(false),
 	index(-1), shade(0)
 { }
 
 
 region_c::region_c(const region_c& other) :
 	snags(), brushes(), entities(), gaps(),
-	liquid(NULL), degenerate(false),
+	degenerate(false),
 	index(-1), shade(0)
 {
 	for (unsigned int i = 0 ; i < other.brushes.size() ; i++)
@@ -534,6 +527,18 @@ bool region_c::HasSameBrushes(const region_c *other) const
 }
 
 
+double region_c::TopZ(csg_brush_c *B) const
+{
+	return B->t.CalcZ(mid_x, mid_y);
+}
+
+
+double region_c::BottomZ(csg_brush_c *B) const
+{
+	return B->b.CalcZ(mid_x, mid_y);
+}
+
+
 void region_c::ClockwiseSnags()
 {
 	if (snags.size() < 2)
@@ -616,7 +621,8 @@ void region_c::RemoveSidesForBrush(const csg_brush_c *B)
 //------------------------------------------------------------------------
 
 gap_c::gap_c(csg_brush_c *B, csg_brush_c *T) :
-	bottom(B), top(T), reachable(false)
+	bottom(B), top(T), reachable(false),
+	liquid(NULL)
 { }
 
 gap_c::~gap_c()
@@ -776,7 +782,15 @@ static void CreateRegion(group_c & root, csg_brush_c *P)
 {
 	SYS_ASSERT(P);
 
-	if (P->bkind == BKIND_Clip)
+	// handle map-models
+	const char *link_key = P->props.getStr("link_entity");
+	if (link_key)
+	{
+		CSG_LinkBrushToEntity(P, link_key);
+		return;
+	}
+
+	if (P->bflags & (BFLAG_Detail | BFLAG_NoClip | BFLAG_NoDraw))
 		return;
 
 	region_c *R = new region_c;
@@ -813,7 +827,7 @@ static void CreateRegion(group_c & root, csg_brush_c *P)
 		snag_c *S = new snag_c(v2, v1->x, qx1 * QUANTIZE_GRID, qy1 * QUANTIZE_GRID,
 				qx2 * QUANTIZE_GRID, qy2 * QUANTIZE_GRID); */
 #else
-			snag_c *S = new snag_c(v2, v1->x, v1->y, v2->x, v2->y);
+		snag_c *S = new snag_c(v2, v1->x, v1->y, v2->x, v2->y);
 #endif
 
 		R->AddSnag(S);
@@ -826,7 +840,7 @@ static void CreateRegion(group_c & root, csg_brush_c *P)
 	}
 
 	if (R->snags.size() < 3 || max_qx <= min_qx || max_qy <= min_qy ||
-			R->HasFlattened())
+		R->HasFlattened())
 	{
 		// degenerate region : skip it
 		delete R;
@@ -1026,7 +1040,7 @@ static void DivideOneRegion(region_c *R, partition_c *part,
 
 	// FIXME: SYS_ASSERT(along_max > along_min + SNAG_EPSILON);
 
-	if (along_max > along_min + SNAG_EPSILON);
+	if (along_max > along_min + SNAG_EPSILON)
 	{
 		double x1, y1;
 		double x2, y2;
@@ -1110,8 +1124,6 @@ static partition_c * ChoosePartition(group_c & group, bool *reached_chunk)
 		// The logic here splits along seed boundaries,
 		// which is optimal for avoiding region splits.  It would still work
 		// though if the Lua code used a different seed size.
-
-#define CHUNK_SIZE  384.0
 
 		double gx1, gy1, gx2, gy2;
 
@@ -1437,14 +1449,14 @@ struct snag_on_node_Compare
 
 static void CollectAllSnags(std::vector<snag_c *> & list)
 {
-	for (unsigned i = 0 ; i < all_regions.size() ; i++)
+	for (unsigned int i = 0 ; i < all_regions.size() ; i++)
 	{
 		region_c *R = all_regions[i];
 
 		if (R->degenerate)
 			continue;
 
-		for (unsigned k = 0 ; k < R->snags.size() ; k++)
+		for (unsigned int k = 0 ; k < R->snags.size() ; k++)
 		{
 			snag_c *S = R->snags[k];
 
@@ -1502,10 +1514,6 @@ static void AddBoundingRegion(group_c & group)
 
 	SYS_ASSERT(map_x1 < map_x2);
 	SYS_ASSERT(map_y1 < map_y2);
-
-	// compute middle for the mini map
-	mini_centre_x = (map_x1 + map_x2) / 2.0;
-	mini_centre_y = (map_y1 + map_y2) / 2.0;
 
 	// make the coords integers
 	map_x1 = floor(map_x1); map_x2 = ceil(map_x2);
@@ -1666,9 +1674,11 @@ static bool CanSwallowBrush(region_c *R, int i, int k)
 	csg_brush_c *A = R->brushes[i];
 	csg_brush_c *B = R->brushes[k];
 
-	if (! (A->bkind == BKIND_Solid  ||
-		   A->bkind == BKIND_Detail ||
-		   A->bkind == BKIND_Sky))
+	if (A->bkind != BKIND_Solid)
+		return false;
+
+	// liquids are handled elsewhere
+	if (B->bkind == BKIND_Liquid)
 		return false;
 
 	return	(B->b.z > A->b.z - Z_EPSILON) &&
@@ -1744,6 +1754,7 @@ static void MarkGapsWithEntities()
 			// ignore lights and boxes
 			if (E->Match("light") ||
 			    E->Match("oblige_sun") ||
+			    E->Match("oblige_rtlight") ||
 				E->Match("oblige_box"))
 				continue;
 
@@ -1781,11 +1792,12 @@ static void CompareRegionGaps(region_c *R1, region_c *R2)
 		gap_c *B = R1->gaps[b_idx];
 		gap_c *F = R2->gaps[f_idx];
 
-		double B_z1 = B->bottom->t.z;
-		double B_z2 = B->   top->b.z;
+		// FIXME : compute these at middle of the snag
+		double B_z1 = R1->TopZ   (B->bottom);
+		double B_z2 = R1->BottomZ(B->top);
 
-		double F_z1 = F->bottom->t.z;
-		double F_z2 = F->   top->b.z;
+		double F_z1 = R2->TopZ   (F->bottom);
+		double F_z2 = R2->BottomZ(F->top);
 
 		if (B_z2 < F_z1 + Z_EPSILON)
 		{
@@ -1958,33 +1970,30 @@ static void DiscoverThemGaps()
 	{
 		region_c *R = all_regions[i];
 
-		if (R->brushes.size() <= 1)
+		// collect all the solid brushes
+		// [ detail brushes are skipped, and clip brushes ]
+		std::vector<csg_brush_c *> solids;
+
+		for (unsigned int n = 0 ; n < R->brushes.size() ; n++)
+		{
+			csg_brush_c *B = R->brushes[n];
+
+			if (B->bkind == BKIND_Solid)
+				solids.push_back(B);
+		}
+
+		if (solids.size() <= 1)
 			continue;
 
-		std::sort(R->brushes.begin(), R->brushes.end(), csg_brush_bz_Compare());
+		std::sort(solids.begin(), solids.end(), csg_brush_bz_Compare());
 
-		csg_brush_c *high = R->brushes[0];
+		csg_brush_c *high = solids[0];
 
-		for (unsigned int k = 1 ; k < R->brushes.size() ; k++)
+		for (unsigned int k = 1 ; k < solids.size() ; k++)
 		{
-			csg_brush_c *A = R->brushes[k];
+			csg_brush_c *A = solids[k];
 
-			// skip the "ephemeral" brushes
-			if (high->bkind == BKIND_Liquid  ||
-			    high->bkind == BKIND_Trigger ||
-				high->bkind == BKIND_Light)
-			{
-				high = A;
-				continue;
-			}
-			else if (A->bkind == BKIND_Liquid  ||
-					 A->bkind == BKIND_Trigger ||
-					 A->bkind == BKIND_Light)
-			{
-				continue;
-			}
-
-			if (A->b.z > high->t.z + Z_EPSILON)
+			if (R->BottomZ(A) > R->TopZ(high) + Z_EPSILON)
 			{
 				// found a gap
 				gap_c *gap = new gap_c(high, A);
@@ -1998,7 +2007,7 @@ static void DiscoverThemGaps()
 			// no gap implies that these two brushes touch/overlap,
 			// hence update the highest one.
 
-			if (A->t.z > high->t.z)
+			if (R->TopZ(A) > R->TopZ(high))
 				high = A;
 		}
 	}
@@ -2014,8 +2023,8 @@ void DetermineLiquids()
 		if (R->gaps.empty())
 			continue;
 
-		double low_z  = R->gaps.front()->bottom->t.z;
-		double high_z = R->gaps. back()->   top->b.z;
+		double low_z  = R->gaps.front()->bottom->b.z;
+		double high_z = R->gaps. back()->   top->t.z;
 
 		for (int k = (int)R->brushes.size()-1 ; k >= 0 ; k--)
 		{
@@ -2024,17 +2033,23 @@ void DetermineLiquids()
 			if (B->bkind != BKIND_Liquid)
 				continue;
 
-			R->RemoveBrush(k);
-
-			// liquid is completely in a solid
+			// liquid is completely in the void?
 			if (B->t.z < low_z + Z_EPSILON || B->b.z > high_z - Z_EPSILON)
 				continue;
 
-			// more than one liquid : choose highest
-			if (R->liquid && B->t.z < R->liquid->t.z)
-				continue;
+			// find gap for this liquid
+			// FIXME: improve how slopes are handled
+			for (int g = (int)R->gaps.size()-1 ; g >= 0 ; g--)
+			{
+				gap_c *gap = R->gaps[g];
+				double mid_z = (gap->bottom->b.z + gap->bottom->t.z) * 0.5;
 
-			R->liquid = B;
+				if (R->TopZ(B) > mid_z)
+				{
+					gap->liquid = B;
+					break;
+				}
+			}
 		}
 	}
 }
@@ -2147,114 +2162,6 @@ void CSG_BSP_Free()
 
 	delete bsp_root;
 	bsp_root = NULL;
-}
-
-
-//------------------------------------------------------------------------
-
-static bool MiniMap_CheckNoDraw(snag_c *S)
-{
-	for (unsigned int k = 0 ; k < S->sides.size() ; k++)
-	{
-		brush_vert_c *BV = S->sides[k];
-
-		int flags = BV->face.getInt("flags");
-
-		if (flags & MLF_DontDraw)
-			return true;
-	}
-
-	return false;
-}
-
-
-static void MiniMap_AddLine(region_c *R, snag_c *S, bool two_sided)
-{
-	int map_W = main_win->build_box->mini_map->GetWidth();
-	int map_H = main_win->build_box->mini_map->GetHeight();
-
-	// the map centre is computed within CSG_BSP()
-
-	int x1 = map_W/2 + (S->x1 - mini_centre_x) * mini_scale;
-	int y1 = map_H/2 + (S->y1 - mini_centre_y) * mini_scale;
-
-	int x2 = map_W/2 + (S->x2 - mini_centre_x) * mini_scale;
-	int y2 = map_H/2 + (S->y2 - mini_centre_y) * mini_scale;
-
-	u8_t r = 255;
-	u8_t g = 255;
-	u8_t b = 255;
-
-	region_c *N = S->partner ? S->partner->region : NULL;
-
-	if (two_sided)
-	{
-		// only draw partnered snags ONCE
-		if (S->partner && S->partner < S)
-			return;
-
-		double f1 = R->gaps.front()->bottom->t.z;
-		double f2 = N->gaps.front()->bottom->t.z;
-
-		double c1 = R->gaps.back()->top->b.z;
-		double c2 = N->gaps.back()->top->b.z;
-
-		if (fabs(f1 - f2) < 0.1 && fabs(c1 - c2) < 0.1)
-			return;
-
-		if (MIN(c1, c2) - MAX(f1, f2) >= 56)
-		{
-			r = 96;
-			g = 160;
-			b = 224;
-		}
-	}
-
-	main_win->build_box->mini_map->DrawLine(x1,y1, x2,y2, r,g,b);
-}
-
-
-static void MiniMap_VisitAll(bool two_sided)
-{
-	for (unsigned int i = 0 ; i < all_regions.size() ; i++)
-	{
-		region_c *R = all_regions[i];
-
-		if (R->gaps.empty())
-			continue;
-
-		for (unsigned int k = 0 ; k < R->snags.size() ; k++)
-		{
-			snag_c *S = R->snags[k];
-
-			if (two_sided != S->IsTwoSided())
-				continue;
-
-			if (MiniMap_CheckNoDraw(S) ||
-				// need to check the partner snag too
-				(S->partner && MiniMap_CheckNoDraw(S->partner)))
-				continue;
-
-			MiniMap_AddLine(R, S, two_sided);
-		}
-	}
-}
-
-
-void CSG_MakeMiniMap(void)
-{
-	if (! main_win)
-		return;
-
-	mini_scale = kf_w(100) / 6400.0;
-
-	main_win->build_box->mini_map->MapBegin();
-
-	// draw all two-sided lines before all the one-sided ones
-	MiniMap_VisitAll(true);
-	MiniMap_VisitAll(false);
-
-	main_win->build_box->mini_map->MapFinish();
 }
 
 

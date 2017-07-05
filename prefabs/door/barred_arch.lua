@@ -7,6 +7,8 @@ PREFABS.Arch_barred =
   file   = "door/barred_arch.wad"
   map    = "MAP01"
 
+  prob   = 50
+
   where  = "edge"
   key    = "barred"
 
@@ -18,8 +20,8 @@ PREFABS.Arch_barred =
   bound_z1 = 0
   bound_z2 = 128
 
-  tag_1  = "?lock_tag"
-  action = "S1_OpenDoor"
+  tag_1  = "?door_tag"
+  door_action = "S1_OpenDoor"
 }
 
 
@@ -39,13 +41,15 @@ PREFABS.Arch_barred_diag =
   file   = "door/barred_arch.wad"
   map    = "MAP02"
 
+  prob   = 50
+
   where  = "diagonal"
   key    = "barred"
 
   bound_z1 = 0
   bound_z2 = 128
 
-  tag_1  = "?lock_tag"
-  action = "S1_OpenDoor"
+  tag_1  = "?door_tag"
+  door_action = "S1_OpenDoor"
 }
 

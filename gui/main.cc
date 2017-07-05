@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2016 Andrew Apted
+//  Copyright (C) 2006-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -61,11 +61,13 @@ bool batch_mode = false;
 const char *batch_output_file = NULL;
 
 // options
-int  window_size = 0;  // AUTO
+int  window_size = 0;  /* AUTO */
 bool alternate_look = false;
+bool wheel_can_bump = true;
+
 bool create_backups = true;
+bool overwrite_warning = true;
 bool debug_messages = false;
-bool fast_lighting = false;
 
 
 game_interface_c * game_object = NULL;
@@ -77,7 +79,7 @@ static void ShowInfo()
 {
 	printf(
 		"\n"
-		"** " OBLIGE_TITLE " " OBLIGE_VERSION " (C) 2006-2016 Andrew Apted **\n"
+		"** " OBLIGE_TITLE " " OBLIGE_VERSION " (C) 2006-2017 Andrew Apted **\n"
 		"\n"
 	);
 
@@ -85,21 +87,21 @@ static void ShowInfo()
 		"Usage: Oblige [options...] [key=value...]\n"
 		"\n"
 		"Available options:\n"
-		"     --home     <dir>     Home directory\n"
-		"     --install  <dir>     Installation directory\n"
+		"     --home     <dir>      Home directory\n"
+		"     --install  <dir>      Installation directory\n"
 		"\n"
-		"     --config   <file>    Config file to use\n"
-		"     --options  <file>    Options file to use\n"
-		"     --log      <file>    Log file to create\n"
+		"     --config   <file>     Config file for GUI\n"
+		"     --options  <file>     Options file for GUI\n"
+		"     --log      <file>     Log file to create\n"
 		"\n"
-		"  -b --batch    <output>  Batch mode (no GUI)\n"
-		"  -a --addon    <file>... Addon(s) to use\n"
-		"  -l --load     <file>    Load settings from a file\n"
-		"  -k --keep               Keep SEED from loaded settings\n"
+		"  -b --batch    <output>   Batch mode (no GUI)\n"
+		"  -a --addon    <file>...  Addon(s) to use\n"
+		"  -l --load     <file>     Load settings from a file\n"
+		"  -k --keep                Keep SEED from loaded settings\n"
 		"\n"
-		"  -d --debug              Enable debugging\n"
-		"  -t --terminal           Print log messages to stdout\n"
-		"  -h --help               Show this help message\n"
+		"  -d --debug               Enable debugging\n"
+		"  -v --verbose             Print log messages to stdout\n"
+		"  -h --help                Show this help message\n"
 		"\n"
 	);
 
@@ -115,7 +117,18 @@ static void ShowInfo()
 		"for more details, or visit http://www.gnu.org/licenses/gpl-2.0.txt\n"
 		"\n"
 	);
+
+	fflush(stdout);
 }
+
+
+static void ShowVersion()
+{
+	printf("Oblige version " OBLIGE_VERSION " (" __DATE__ ")\n");
+
+	fflush(stdout);
+}
+
 
 
 void Determine_WorkingPath(const char *argv0)
@@ -349,8 +362,8 @@ int Main_DetermineScaling()
 		return window_size - 2;
 
 	// automatic selection
-	if (screen_w >= 1600 && screen_h >= 720) return 2;
-	if (screen_w >= 1200 && screen_h >= 600) return 1;
+	if (screen_w >= 1600 && screen_h >= 800) return 2;
+	if (screen_w >= 1200 && screen_h >= 672) return 1;
 	if (screen_w <= 640  && screen_h <= 480) return -1;
 
 	return 0;
@@ -363,11 +376,11 @@ void Main_SetupFLTK()
 
 	if (! alternate_look)
 	{
-		Fl::background(236, 232, 228);
+		Fl::background(236, 228, 224);
 		Fl::background2(255, 255, 255);
 		Fl::foreground(0, 0, 0);
 
-		Fl::scheme("plastic");
+		Fl::scheme("gtk+");
 	}
 
 	screen_w = Fl::w();
@@ -550,27 +563,11 @@ void Main_SetSeed()
 }
 
 
-static void Batch_Defaults()
+static void Module_Defaults()
 {
-	// inform Lua code about batch mode (the value doesn't matter)
-	ob_set_config("batch", "yes");
-
-	// Game Settings
-	ob_set_config("mode",   "sp");
-	ob_set_config("length", "game");
-
-	// Level Architecture
-	ob_set_config("size",     "epi");
-	ob_set_config("outdoors", "mixed");
-	ob_set_config("caves",    "mixed");
-
-	// Playing Style
-	ob_set_config("mons",    "normal");
-	ob_set_config("strength","medium");
-	ob_set_config("weapons", "normal");
-	ob_set_config("items",   "normal");
-	ob_set_config("health",  "normal");
-	ob_set_config("ammo",    "normal");
+	ob_set_mod_option("small_spiderdemon", "self", "1");
+	ob_set_mod_option("sky_generator",     "self", "1");
+	ob_set_mod_option("music_swapper",     "self", "1");
 }
 
 
@@ -605,6 +602,9 @@ bool Build_Cool_Shit()
 		else if (StringCaseCmp(format, "quake2") == 0)
 			game_object = Quake2_GameObject();
 
+		else if (StringCaseCmp(format, "quake3") == 0)
+			game_object = Quake3_GameObject();
+
 		else
 			Main_FatalError("ERROR: unknown format: '%s'\n", format);
 	}
@@ -616,6 +616,7 @@ bool Build_Cool_Shit()
 		main_win->Locked(true);
 		main_win->build_box->SetAbortButton(true);
 		main_win->build_box->SetStatus(_("Preparing..."));
+		main_win->build_box->DisplaySeed(next_rand_seed);
 	}
 
 	u32_t start_time = TimeGetMillies();
@@ -642,6 +643,11 @@ bool Build_Cool_Shit()
 		u32_t total_time = end_time - start_time;
 
 		LogPrintf("\nTOTAL TIME: %1.2f seconds\n\n", total_time / 1000.0);
+	}
+	else
+	{
+		if (main_win)
+			main_win->build_box->DisplaySeed(-1);
 	}
 
 	if (main_win)
@@ -679,6 +685,11 @@ int main(int argc, char **argv)
 		ShowInfo();
 		exit(1);
 	}
+	else if (ArgvFind(0, "version") >= 0)
+	{
+		ShowVersion();
+		exit(1);
+	}
 
 
 	int batch_arg = ArgvFind('b', "batch");
@@ -705,12 +716,17 @@ int main(int argc, char **argv)
 
 	LogInit(logging_file);
 
-	if (batch_mode || ArgvFind('t', "terminal") >= 0)
+	if (ArgvFind('d', "debug") >= 0)
+		debug_messages = true;
+
+	// accept -t and --terminal for backwards compatibility
+	if (ArgvFind('v', "verbose") >= 0 || ArgvFind('t', "terminal") >= 0)
 		LogEnableTerminal(true);
+
 
 	LogPrintf("\n");
 	LogPrintf("********************************************************\n");
-	LogPrintf("** " OBLIGE_TITLE " " OBLIGE_VERSION " (C) 2006-2016 Andrew Apted **\n");
+	LogPrintf("** " OBLIGE_TITLE " " OBLIGE_VERSION " (C) 2006-2017 Andrew Apted **\n");
 	LogPrintf("********************************************************\n");
 	LogPrintf("\n");
 
@@ -722,6 +738,8 @@ int main(int argc, char **argv)
 	LogPrintf("config_file: %s\n\n", config_file);
 
 
+	LogEnableDebug(debug_messages);
+
 	Trans_Init();
 
 	if (! batch_mode)
@@ -730,11 +748,6 @@ int main(int argc, char **argv)
 
 		Trans_SetLanguage();
 	}
-
-	if (ArgvFind('d', "debug") >= 0)
-		debug_messages = true;
-
-	LogEnableDebug(debug_messages);
 
 
 	if (! batch_mode)
@@ -746,8 +759,6 @@ int main(int argc, char **argv)
 
 
 	VFS_InitAddons(argv[0]);
-
-	VFS_ParseCommandLine();
 
 
 	const char *load_file = NULL;
@@ -767,9 +778,14 @@ int main(int argc, char **argv)
 
 	if (batch_mode)
 	{
+		VFS_ParseCommandLine();
+
 		Script_Open();
 
-		Batch_Defaults();
+		// inform Lua code about batch mode (the value doesn't matter)
+		ob_set_config("batch", "yes");
+
+		Module_Defaults();
 
 		// batch mode never reads/writes the normal config file.
 		// but we can load settings from a explicitly specified file...
@@ -784,6 +800,7 @@ int main(int argc, char **argv)
 		if (! Build_Cool_Shit())
 		{
 			fprintf(stderr, "FAILED!\n");
+			LogPrintf("FAILED!\n");
 
 			Main_Shutdown(false);
 			return 3;
@@ -796,23 +813,25 @@ int main(int argc, char **argv)
 
 	/* ---- normal GUI mode ---- */
 
+
 	// this not only finds PK3 files, but also activates the ones specified in OPTIONS.txt
 	VFS_ScanForAddons();
 
-//???	Default_Location();
+	VFS_ParseCommandLine();
 
+	// create the main window
 	int main_w, main_h;
 	UI_MainWin::CalcWindowSize(&main_w, &main_h);
 
 	const char *main_title = StringPrintf("%s %s", _(OBLIGE_TITLE), OBLIGE_VERSION);
 	main_win = new UI_MainWin(main_w, main_h, main_title);
 
+//???	Default_Location();
+
 	Script_Open();
 
-	// FIXME: main_win->Defaults();
-	main_win->game_box ->Defaults();
-	main_win->level_box->Defaults();
-	main_win->play_box ->Defaults();
+	// enable certain modules by default
+	Module_Defaults();
 
 	// load config after creating window (will set widget values)
 	if (! Cookie_Load(config_file))

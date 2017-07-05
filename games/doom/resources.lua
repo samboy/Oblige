@@ -2,7 +2,7 @@
 --  DOOM RESOURCES / GRAFIX
 --------------------------------------------------------------------
 --
---  Copyright (C) 2006-2015 Andrew Apted
+--  Copyright (C) 2006-2016 Andrew Apted
 --  Copyright (C)      2011 Chris Pisarczyk
 --
 --  This program is free software; you can redistribute it and/or
@@ -127,8 +127,8 @@ function DOOM.make_cool_gfx()
   gui.wad_logo_gfx("WALL52_1", "p", "PILL",   128,128, 1)
   gui.wad_logo_gfx("WALL53_1", "p", "BOLT",   128,128, 2)
   gui.wad_logo_gfx("WALL55_1", "p", "RELIEF", 128,128, 3)
-  gui.wad_logo_gfx("WALL54_1", "p", "CARVE",  128,128, 4)
-  gui.wad_logo_gfx("WALL52_2", "p", "CARVE",  128,128, 5)
+--gui.wad_logo_gfx("WALL54_1", "p", "CARVE",  128,128, 4)
+  gui.wad_logo_gfx("WALL52_2", "p", "CARVE",  128,128, 5) -- O_BLACK
 
   -- flats
   gui.wad_logo_gfx("O_PILL",   "f", "PILL",   64,64, 1)
@@ -159,14 +159,14 @@ end
 
 
 function DOOM.make_episode_gfx()
+  -- this is for Doom 1 / Ultimate Doom.
+  -- does nothing for Doom 2 / Final Doom (they lack "name_patch" field).
+
   local colors = assert(DOOM.LEVEL_GFX_COLORS["red"])
 
   gui.set_colormap(2, colors)
 
-  for idx = 1, 4 do
-    local EPI = GAME.episodes[idx]
-    assert(EPI)
-
+  each EPI in GAME.episodes do
     if EPI.name_patch and EPI.description then
       gui.wad_name_gfx(EPI.name_patch, EPI.description, 2)
     end
@@ -181,11 +181,11 @@ end
 
 function DOOM.all_done()
   DOOM.make_cool_gfx()
+  DOOM.make_episode_gfx()
 
   local dir = "games/doom/data/"
 
   gui.wad_merge_sections(dir .. "doom_falls.wad")
-  gui.wad_merge_sections(dir .. "hang_lamp.wad")
   gui.wad_merge_sections(dir .. "lift_flat.wad")
   gui.wad_merge_sections(dir .. "metal_step.wad")
   gui.wad_merge_sections(dir .. "vine_dude.wad")
@@ -193,6 +193,8 @@ function DOOM.all_done()
 
   if OB_CONFIG.game == "doom1" or OB_CONFIG.game == "ultdoom" then
     gui.wad_merge_sections(dir .. "short_bars.wad")
+  else
+    gui.wad_merge_sections(dir .. "hang_lamp.wad")
   end
 
   if OB_CONFIG.length == "game" then

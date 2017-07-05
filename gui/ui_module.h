@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2009 Andrew Apted
+//  Copyright (C) 2006-2016 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -26,6 +26,10 @@ class UI_Module : public Fl_Group
 {
 friend class UI_CustomMods;
 
+	// NOTES:
+	// -  module is "enabled" when mod_button->value() == 1
+	// -  module is "shown" when visible() == true
+
 private:
 	std::string id_name;
 
@@ -33,15 +37,21 @@ private:
 
 	std::map<std::string, UI_RChoice *> choice_map;
 
+	// only used while positioning the options (as they are added)
+	int cur_opt_y;
+
 public:
-	UI_Module(int x, int y, int w, int h, const char *id, const char *label, const char *tip);
+	UI_Module(int X, int Y, int W, int H, const char *id, const char *label, const char *tip);
 	virtual ~UI_Module();
 
-	void AddOption(const char *option, const char *label, const char *tip);
+	void AddOption(const char *option, const char *label, const char *tip,
+	               int gap, Fl_Color select_col);
 
-	void OptionPair(const char *option, const char *id, const char *label);
+	void AddOptionChoice(const char *option, const char *id, const char *label);
 
-	bool ParseValue(const char *option, const char *value);
+	bool SetOption(const char *option, const char *value);
+
+	bool Is_UI() const;
 
 public:
 	int CalcHeight() const;
@@ -72,24 +82,27 @@ private:
 	// total height of all shown modules
 	int total_h;
 
+	// highlight color for option buttons
+	Fl_Color button_col;
+
 public:
-	UI_CustomMods(int x, int y, int w, int h, const char *label = NULL);
+	UI_CustomMods(int X, int Y, int W, int H, Fl_Color _button_col);
 	virtual ~UI_CustomMods();
 
 public:
 	void AddModule(const char *id, const char *label, const char *tip);
 
-	bool ShowOrHide(const char *id, bool new_shown);
+	// these return false if module is unknown
+	bool ShowModule(const char *id, bool new_shown);
+	bool EnableMod(const char *id, bool enable);
 
-	void ChangeValue(const char *id, bool enable);
+	bool AddOption (const char *module, const char *option, const char *label,
+	                const char *tip, int gap);
 
-	void AddOption (const char *module, const char *option, const char *label, const char *tip);
+	void AddOptionChoice(const char *module, const char *option,
+						 const char *id, const char *label);
 
-	void OptionPair(const char *module, const char *option,
-			const char *id, const char *label);
-
-	bool ParseOptValue(const char *module, const char *option,
-			const char *value);
+	bool SetOption(const char *module, const char *option, const char *value);
 
 	void Locked(bool value);
 

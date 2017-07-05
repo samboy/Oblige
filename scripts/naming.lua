@@ -4,7 +4,7 @@
 --
 --  Oblige Level Maker
 --
---  Copyright (C) 2008-2016 Andrew Apted
+--  Copyright (C) 2008-2017 Andrew Apted
 --  Copyright (C) 2008-2009 Jon Vail
 --  Copyright (C)      2009 Enhas
 --  Copyright (C) 2010-2011 Chris Pisarczyk
@@ -60,7 +60,6 @@ namelib.NAMES =
 
         -- these by Chris
         ["Fear the"]=10
-        ["Dodge the"]=10
         ["Beware the"]=10
         ["Bane of the"]=10
         ["Scourge of the"]=10
@@ -73,6 +72,7 @@ namelib.NAMES =
         ["Pain from the"]=10
 
         -- command-like prefixes, some by Dante
+--[[
         ["Attack the"]=20
         ["Destroy the"]=20
         ["Shut Down the"]=15
@@ -80,6 +80,7 @@ namelib.NAMES =
         ["Secure the"]=15
         ["Clear this"]=5
         ["Defend this"]=10
+--]]
       }
     }
 
@@ -121,9 +122,11 @@ namelib.NAMES =
       ["%v %a %n"] = 24
       ["%v %b %n"] = 24
 
+--[[
       ["%r the %n"] = 12
       ["%r the %a %n"] = 12
       ["%r the %b %n"] = 12
+--]]
 
       ["%s"] = 16
     }
@@ -203,6 +206,7 @@ namelib.NAMES =
         Construction=5, Assembly=5, Management=5,
         Development=5, Foundation=5,
         Aegis=3, Stockade=3, Refuge=5,
+
         Munitions=5, Armament=5, Drainage=5,
         Support=5, Counteraction=3, Holding=5,
         Testing=5, Quarantine=5, Authorization=5,
@@ -236,6 +240,7 @@ namelib.NAMES =
         Chemical=15, Slige=10, Waste=10, Stibine=3,
         Mining=15, Fusion=15, Thermal=10,
         Infrared=10, Radiation=5, Hydro=3,
+
         Parallax=5, Ultraviolet=5, Slime=7,
         Steel=5, Fluid=3, Iron=3, Combustion=5,
         Steam=5, Carbon=5, Pressure=5, Pyrolosis=3,
@@ -718,7 +723,6 @@ namelib.NAMES =
         ["Burning Sea"]=10
         ["Cato's Escort"]=10
         ["Centromere"]=10
-        ["Charon"]=10
         ["Charred Flesh"]=10
         ["Cocoon of Filth"]=10
         ["Cold Comfort"]=10
@@ -1686,39 +1690,56 @@ namelib.NAMES =
         Dark = 20
         Menacing = 20
         Cold = 10
+        Fiery = 10
+        Blazing = 15
         Savage = 30
         Deathly = 20
         Strange = 10
+        Burning = 10
+        Frozen  = 10
 
         Evil = 50
         Monstrous = 15
+        Sinful  = 15
         Demonic = 15
         Infested = 10
         Doomed = 10
+        Malicious = 10
         Forsaken = 10
+        Filthy   = 5
 
         Morbid = 20
         Lonely = 10
         Weird = 10
         Endless = 20
+        Infinite = 10
         Gory = 10
+        Visceral = 15
+        Corrupt = 15
+        Wicked  = 10
+        Vile    = 5
 
         Fatal = 10
         Lost  = 10
         Fetid = 5
+        Foul  = 5
         Cursed = 10
         Haunted = 10
         Cruel = 10
 
         Hallowed = 10
         Unholy = 10
+        Profane = 15
         Tortured = 10
         Forgotten = 10
+        Abandoned = 10
+        Ghoulish  = 10
 
         Hidden = 10
         Wretched = 15
         Nefarious = 15
         Extreme = 10
+        Wrecked = 10
       }
 
       p =
@@ -1757,6 +1778,7 @@ namelib.NAMES =
         Cult = 10
         Ruins = 10
         Caverns = 15
+        Garden = 10
 
         Night = 30
         Knowledge = 10
@@ -1786,7 +1808,6 @@ namelib.NAMES =
         Dreams = 20
         Souls = 10
         Hate = 10
-        Desire = 10
         Magic = 15
         Rage = 10
 
@@ -1885,6 +1906,9 @@ namelib.NAMES =
         ["Where Devils Spawn"] = 20
 
         -- miscellaneous
+        ["A Dreaded Obligation"] = 30
+        ["Your Dire Obligation"] = 30
+
         ["The Final Hour"] = 20
         ["Out Of Time"] = 20
         ["Days Of Rage"] = 20
@@ -1902,6 +1926,377 @@ namelib.NAMES =
     }
   }
   -- end of 'TITLE' and 'SUB_TITLE' themes
+
+
+  --------------------------------------------------
+
+  -- name of the mastermind behind all the evil
+  NAME_BOSS =
+  {
+    patterns =
+    {
+      ["The Spider Mastermind"] = 40
+
+      ["The Leader of Hell"] = 20
+      ["The Necromancer"] = 20
+      ["The Demon Queen"] = 20
+      ["The Cyber-Devil"] = 20
+      ["The Shadow Council"] = 20
+      ["The Witch-King"] = 20
+      ["The Alien Faction"] = 20
+      ["The Cruel One"] = 20
+
+      ["Satan"] = 10
+      ["Beelzebub"] = 10
+      ["Baal"] = 10
+      ["Moloch"] = 10
+    }
+
+    lexicon = {}
+  }
+
+
+  -- name of lesser bosses, minions of the mastermind
+  NAME_MINION =
+  {
+    patterns =
+    {
+      ["The Arch-Vile"] = 40
+      ["The Baron of Hell"] = 40
+
+      ["The Demon Prince"] = 20
+      ["The Gatekeeper"] = 20
+      ["The Guardian"] = 20
+      ["The Wicked Acolyte"] = 20
+      ["The Dark Archon"] = 20
+      ["The Evil Beast"] = 20
+      ["The Zombie Lord"] = 20
+
+      ["Doctor Kruger"] = 10
+    }
+
+    lexicon = {}
+  }
+
+
+  -- name of a powerful thing needed to defeat the big boss
+  NAME_ARTIFACT =
+  {
+    patterns =
+    {
+      ["Khronos Device"] = 10
+      ["Soul-X Agitator"] = 10
+      ["Quantum Disrupter"] = 10
+      ["Gravitronic Amplifier"] = 10
+      ["Ectoplasmic Deflector"] = 10
+
+      ["Sphere of Invincibility"] = 10
+      ["Ring of Power"] = 10
+      ["Crystal Sceptre"] = 10
+      ["Diamond Skull"] = 10
+
+      ["Sword of the Infidel"] = 10
+      ["Staff of Ulysses"] = 10
+      ["Hand of Charon"] = 10
+    }
+
+    lexicon = {}
+  }
+
+
+  -- name of the player's friend, for capture/rescue sub-plots
+  NAME_FRIEND =
+  {
+    patterns =
+    {
+      ["Professor Braun"] = 20
+      ["Doctor Stine"] = 20
+      ["Major Halderman"] = 20
+      ["Sergeant Kelly"] = 20
+      ["Private Swann"] = 20
+
+      ["Christopher"] = 10
+      ["Michael"] = 10
+      ["Jonathon"] = 10
+
+      ["Arlene"] = 40
+      ["Cassandra"] = 20
+      ["Samantha"] = 20
+    }
+
+    lexicon = {}
+  }
+
+
+  -- location for the early action, neutral-ish places
+  NAME_PLACE1 =
+  {
+    patterns =
+    {
+      ["Phobos"] = 20
+      ["Demios Base"] = 20
+      ["UAC Complex"] = 20
+
+      ["Lunar Base"] = 20
+      ["Martian Complex"] = 20
+      ["Jupiter Station"] = 20
+      ["Orbital Station"] = 20
+
+      ["Terran Starport"] = 20
+      ["Egyptian Portal"] = 20
+      ["Mayan Temple"] = 20
+    }
+
+    lexicon = {}
+  }
+
+
+  -- locations for later battles or the finale, hell-ish places
+  NAME_PLACE2 =
+  {
+    patterns =
+    {
+      ["Shores of Hell"] = 20
+      ["Land of the Undead"] = 20
+      ["Crimson Underworld"] = 20
+      ["Dimension of Evil"] = 20
+      ["Kingdom of Fire"] = 20
+      ["Nether-Sphere"] = 20
+      ["Ghostly Realm"] = 20
+    }
+
+    lexicon = {}
+  }
+  -- end of all the 'NAME_XXX' themes
+
+
+  --------------------------------------------------
+
+  TEXT_FACE_MINION =
+  {
+    patterns =
+    {
+      ["Now you must find <minion>, who holds the key "..
+       "to this infernal mystery."
+      ] = 10
+    }
+
+    lexicon = {}
+  }
+
+  TEXT_DEFEAT_MINION =
+  {
+    patterns =
+    {
+      ["With one last blow you finish off <minion>, " ..
+       "its hideous body laying at your feet."
+      ] = 10
+    }
+
+    lexicon = {}
+  }
+
+
+  TEXT_FACE_BOSS =
+  {
+    patterns =
+    {
+      ["Ahead lies the dominion of <boss>, "..
+       "an evil place where even fools fear to tread. "..
+       "Daunted, yet determined, you emerge from the "..
+       "inter-dimensional portal and begin to explore "..
+       "this alien world...."
+      ] = 10
+    }
+
+    lexicon = {}
+  }
+
+  TEXT_DEFEAT_BOSS =
+  {
+    patterns =
+    {
+      ["Your skillful use of the <artifact> was glorious, " ..
+       "defeating <boss> once and for all time."
+       -- FIXME : more stuff...
+      ] = 10
+    }
+
+    lexicon = {}
+  }
+
+
+  TEXT_LEARN_ARTIFACT =
+  {
+    patterns =
+    {
+      ["You have learned of a powerful artifact, "..
+       "the <artifact>.  "..
+       "But is it real, or only a myth or legend? "..
+       "Somehow, you know you are going to find out."
+      ] = 10
+    }
+
+    lexicon = {}
+  }
+
+  TEXT_FOUND_ARTIFACT =
+  {
+    patterns =
+    {
+      ["The <artifact> is yours! "..
+       "But your jubilation soon turns into a grim "..
+       "realization of what this means: it shall be "..
+       "your fate to use it against the "..
+       "most evil entity in the universe."
+       -- to save the entire human race
+      ] = 10
+    }
+
+    lexicon = {}
+  }
+
+
+  TEXT_LEARN_FRIEND =
+  {
+    patterns =
+    {
+      ["You receive communication that your dear friend, "..
+       "<friend>, has been abducted by the army of <minion>!"
+      ] = 10
+    }
+
+    lexicon = {}
+  }
+
+  TEXT_RESCUE_FRIEND =
+  {
+    patterns =
+    {
+      ["In a nearby dungeon cell you discover your friend, "..
+       "<friend>, who is still alive!"..
+       "|Quickly you remove their shackles and free them. "..
+       "Almost too weak to talk, a barely audible \"Thank you\" "..
+       "is followed by some surprising information: "..
+       "the location of the <artifact>!" ..
+       "|Relieved that <friend> is now safe, you set forth to "..
+       "retreive the <artifact> from its secret location."
+      ] = 10
+    }
+
+    lexicon = {}
+  }
+
+  -- gosh, this will cause some tears
+  TEXT_LOSE_FRIEND =
+  {
+    patterns =
+    {
+      ["In the distance you recognize your friend "..
+       "<friend>, waiting for you. "..
+       "You hurry toward them, but all too soon your "..
+       "joy turns to repulsion as you discover they have "..
+       "been turned into a demon!"..
+       "|\"Noooo!\" you scream, "..
+       "and shudder as you realize what you must now do... "..
+       "|Your soul feels ripped apart, the only consolation "..
+       "is that <friend> can finally rest in piece. "..
+       "<boss> will pay for this!"
+      ] = 10
+    }
+
+    lexicon = {}
+  }
+
+
+  TEXT_SECRET =
+  {
+    patterns =
+    {
+      ["%c %f |%p |%m %e"] = 50
+
+      ["%s"] = 10
+    }
+
+    lexicon =
+    {
+      c =
+      {
+        ["Congratulations,"] = 50
+        ["Well done!"] = 50
+        ["Oh yes!"] = 50
+        ["Woohoo!"] = 50
+      }
+
+      f =
+      {
+        ["You found the secret level!"] = 50
+      }
+
+      p =
+      {
+        ["This place looks very weird..."] = 50
+      }
+
+      m =
+      {
+        ["The monsters will kill you!"] = 50
+      }
+
+      e =
+      {
+        ["So, better not stay too long..."] = 50
+      }
+
+      -- complete replacements
+      s =
+      {
+        ["Welcome . . . . . . |. . . . . to the Twilight Zone"] = 10
+      }
+    }
+  }
+
+
+  TEXT_SECRET2 =
+  {
+    patterns =
+    {
+      ["%c %f |%e"] = 50
+
+      ["%s"] = 10
+    }
+
+    lexicon =
+    {
+      c =
+      {
+        ["Congratulations!"] = 20
+        ["Very well done!"] = 50
+        ["Holy shit,"] = 50
+        ["Woah,"] = 50
+        ["This is incredible,"] = 40
+        ["This is almost unbelievable, because"] = 20
+      }
+
+      f =
+      {
+        ["You found the super secret level!"] = 50
+      }
+
+      e =
+      {
+        ["Are you ready for what is ahead?"] = 50
+      }
+
+      -- complete replacements
+      s =
+      {
+        ["Human! |You will be punished for entering our " ..
+         "secret chambers!"] = 10
+      }
+    }
+  }
+  -- end of all the 'TEXT_XXX' themes
 }
 
 
@@ -2098,6 +2493,7 @@ function namelib.test()
   test_theme("TECH")
   test_theme("GOTHIC")
   test_theme("URBAN")
+
   test_theme("BOSS")
   test_theme("EPISODE")
   test_theme("TITLE")

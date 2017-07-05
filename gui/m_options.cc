@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2016 Andrew Apted
+//  Copyright (C) 2006-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -47,26 +47,31 @@ static void Parse_Option(const char *name, const char *value)
 	{
 		t_language = StringDup(value);
 	}
+	else if (StringCaseCmp(name, "font_size") == 0 ||
+	         StringCaseCmp(name, "window_size") == 0 /* backwards compat */)
+	{
+		window_size = atoi(value);
+		window_size = CLAMP(0, window_size, 5);
+	}
 	else if (StringCaseCmp(name, "alternate_look") == 0)
 	{
 		alternate_look = atoi(value) ? true : false;
 	}
-	else if (StringCaseCmp(name, "window_size") == 0)
+	else if (StringCaseCmp(name, "wheel_can_bump") == 0)
 	{
-		window_size = atoi(value);
-		window_size = CLAMP(0, window_size, 5);
+		wheel_can_bump = atoi(value) ? true : false;
 	}
 	else if (StringCaseCmp(name, "create_backups") == 0)
 	{
 		create_backups = atoi(value) ? true : false;
 	}
+	else if (StringCaseCmp(name, "overwrite_warning") == 0)
+	{
+		overwrite_warning = atoi(value) ? true : false;
+	}
 	else if (StringCaseCmp(name, "debug_messages") == 0)
 	{
 		debug_messages = atoi(value) ? true : false;
-	}
-	else if (StringCaseCmp(name, "fast_lighting") == 0)
-	{
-		fast_lighting = atoi(value) ? true : false;
 	}
 	else if (StringCaseCmp(name, "last_file") == 0)
 	{
@@ -188,17 +193,20 @@ bool Options_Save(const char *filename)
 	LogPrintf("Saving options file...\n");
 
 	fprintf(option_fp, "-- OPTIONS FILE : OBLIGE %s\n", OBLIGE_VERSION); 
-	fprintf(option_fp, "-- " OBLIGE_TITLE " (C) 2006-2016 Andrew Apted\n");
+	fprintf(option_fp, "-- " OBLIGE_TITLE " (C) 2006-2017 Andrew Apted\n");
 	fprintf(option_fp, "-- http://oblige.sourceforge.net/\n\n");
 
 	fprintf(option_fp, "language = %s\n", t_language);
 	fprintf(option_fp, "\n");
 
+	fprintf(option_fp, "font_size      = %d\n", window_size);
 	fprintf(option_fp, "alternate_look = %d\n", alternate_look ? 1 : 0);
-	fprintf(option_fp, "window_size    = %d\n", window_size);
+	fprintf(option_fp, "wheel_can_bump = %d\n", wheel_can_bump ? 1 : 0);
+	fprintf(option_fp, "\n");
+
 	fprintf(option_fp, "create_backups = %d\n", create_backups ? 1 : 0);
+	fprintf(option_fp, "overwrite_warning = %d\n", overwrite_warning ? 1 : 0);
 	fprintf(option_fp, "debug_messages = %d\n", debug_messages ? 1 : 0);
-	fprintf(option_fp, "fast_lighting  = %d\n",  fast_lighting ? 1 : 0);
 
 //???	fprintf(option_fp, "last_file = %s\n", UI_GetLastFile());
 	fprintf(option_fp, "\n");
@@ -225,13 +233,14 @@ public:
 
 private:
 	Fl_Choice       *opt_language;
-	Fl_Choice       *opt_win_size;
+	Fl_Choice       *opt_font_size;
+
 	Fl_Check_Button *opt_alt_look;
+	Fl_Check_Button *opt_wheel_bump;
 
 	Fl_Check_Button *opt_backups;
+	Fl_Check_Button *opt_overwrite;
 	Fl_Check_Button *opt_debug;
-
-	Fl_Check_Button *opt_lighting;
 
 public:
 	UI_OptionsWin(int W, int H, const char *label = NULL);
@@ -300,18 +309,19 @@ private:
 		}
 	}
 
-	static void callback_WinSize(Fl_Widget *w, void *data)
+	static void callback_FontSize(Fl_Widget *w, void *data)
 	{
 		UI_OptionsWin *that = (UI_OptionsWin *)data;
 
-		window_size = that->opt_win_size->value();
+		window_size = that->opt_font_size->value();
 	}
 
 	static void callback_AltLook(Fl_Widget *w, void *data)
 	{
 		UI_OptionsWin *that = (UI_OptionsWin *)data;
 
-		alternate_look = that->opt_alt_look->value() ? true : false;
+		alternate_look = that->opt_alt_look  ->value() ? true : false;
+		wheel_can_bump = that->opt_wheel_bump->value() ? true : false;
 	}
 
 	static void callback_Backups(Fl_Widget *w, void *data)
@@ -321,6 +331,13 @@ private:
 		create_backups = that->opt_backups->value() ? true : false;
 	}
 
+	static void callback_Overwrite(Fl_Widget *w, void *data)
+	{
+		UI_OptionsWin *that = (UI_OptionsWin *)data;
+
+		overwrite_warning = that->opt_overwrite->value() ? true : false;
+	}
+
 	static void callback_Debug(Fl_Widget *w, void *data)
 	{
 		UI_OptionsWin *that = (UI_OptionsWin *)data;
@@ -328,14 +345,6 @@ private:
 		debug_messages = that->opt_debug->value() ? true : false;
 		LogEnableDebug(debug_messages);
 	}
-
-	static void callback_Lighting(Fl_Widget *w, void *data)
-	{
-		UI_OptionsWin *that = (UI_OptionsWin *)data;
-
-		fast_lighting = that->opt_lighting->value() ? true : false;
-	}
-
 };
 
 
@@ -346,17 +355,12 @@ UI_OptionsWin::UI_OptionsWin(int W, int H, const char *label) :
 	Fl_Window(W, H, label),
 	want_quit(false)
 {
-	// cancel Fl_Group's automatic add crap
-	end();
-
 	// non-resizable
 	size_range(W, H, W, H);
+
 	callback(callback_Quit, this);
 
 	box(FL_THIN_UP_BOX);
-
-	if (! alternate_look)
-		color(BUILD_BG, BUILD_BG);
 
 
 	int y_step = kf_h(9);
@@ -374,8 +378,6 @@ UI_OptionsWin::UI_OptionsWin(int W, int H, const char *label) :
 	heading->labelfont(FL_HELVETICA_BOLD);
 	heading->labelsize(header_font_size);
 
-	add(heading);
-
 	cy += heading->h();
 
 
@@ -383,31 +385,32 @@ UI_OptionsWin::UI_OptionsWin(int W, int H, const char *label) :
 	opt_language->align(FL_ALIGN_LEFT);
 	opt_language->callback(callback_Language, this);
 
-	add(opt_language);
-
 	PopulateLanguages();
 
 	cy += opt_language->h() + y_step;
 
 
-	opt_win_size = new Fl_Choice(136 + KF * 40, cy, kf_w(130), kf_h(24), _("Window Size: "));
-	opt_win_size->align(FL_ALIGN_LEFT);
-	opt_win_size->add(_("AUTO|Tiny|Small|Medium|Large|Huge"));
-	opt_win_size->callback(callback_WinSize, this);
-	opt_win_size->value(window_size);
+	opt_font_size = new Fl_Choice(136 + KF * 40, cy, kf_w(130), kf_h(24), _("Font Size: "));
+	opt_font_size->align(FL_ALIGN_LEFT);
+	opt_font_size->add(_("AUTO|Tiny|Small|Medium|Large|Huge"));
+	opt_font_size->callback(callback_FontSize, this);
+	opt_font_size->value(window_size);
 
-	add(opt_win_size);
-
-	cy += opt_win_size->h() + y_step;
+	cy += opt_font_size->h() + y_step;
 
 
 	opt_alt_look = new Fl_Check_Button(cx, cy, W-cx-pad, kf_h(24), _(" Alternate Look"));
 	opt_alt_look->value(alternate_look ? 1 : 0);
 	opt_alt_look->callback(callback_AltLook, this);
 
-	add(opt_alt_look);
+	cy += opt_alt_look->h() + y_step*2/3;
 
-	cy += opt_alt_look->h() + y_step;
+
+	opt_wheel_bump = new Fl_Check_Button(cx, cy, W-cx-pad, kf_h(24), _(" Change Settings via Mouse Wheel"));
+	opt_wheel_bump->value(alternate_look ? 1 : 0);
+	opt_wheel_bump->callback(callback_AltLook, this);
+
+	cy += opt_wheel_bump->h() + y_step;
 
 
 	//----------------
@@ -420,8 +423,6 @@ UI_OptionsWin::UI_OptionsWin(int W, int H, const char *label) :
 	heading->labelfont(FL_HELVETICA_BOLD);
 	heading->labelsize(header_font_size);
 
-	add(heading);
-
 	cy += heading->h() + y_step;
 
 
@@ -429,69 +430,42 @@ UI_OptionsWin::UI_OptionsWin(int W, int H, const char *label) :
 	opt_backups->value(create_backups ? 1 : 0);
 	opt_backups->callback(callback_Backups, this);
 
-	add(opt_backups);
-
-	cy += opt_backups->h() + y_step;
+	cy += opt_backups->h() + y_step*2/3;
 
 
-	opt_debug = new Fl_Check_Button(cx, cy, W-cx-pad, kf_h(24), _(" Debugging Messages (in LOGS.txt)"));
+	opt_overwrite = new Fl_Check_Button(cx, cy, W-cx-pad, kf_h(24), _(" Overwrite File Warning"));
+	opt_overwrite->value(overwrite_warning ? 1 : 0);
+	opt_overwrite->callback(callback_Overwrite, this);
+
+	cy += opt_overwrite->h() + y_step*2/3;
+
+
+	opt_debug = new Fl_Check_Button(cx, cy, W-cx-pad, kf_h(24), _(" Debugging Messages"));
 	opt_debug->value(debug_messages ? 1 : 0);
 	opt_debug->callback(callback_Debug, this);
-
-	add(opt_debug);
 
 	cy += opt_debug->h() + y_step;
 
 
 	//----------------
 
-
-#if 0  // OLD
-	cy += y_step + y_step/2;
-
-	heading = new Fl_Box(FL_NO_BOX, x()+pad, cy, W-pad*2, kf_h(24), "Doom / Heretic / Hexen");
-	heading->align(FL_ALIGN_LEFT | FL_ALIGN_INSIDE);
-	heading->labeltype(FL_NORMAL_LABEL);
-	heading->labelfont(FL_HELVETICA_BOLD);
-	heading->labelsize(header_font_size);
-
-	add(heading);
-
-	cy += heading->h() + y_step;
-
-
-	opt_lighting = new Fl_Check_Button(cx, cy, W-cx-pad, kf_h(24), " Bland Lighting Mode");
-	opt_lighting->value(fast_lighting ? 1 : 0);
-	opt_lighting->callback(callback_Lighting, this);
-
-	add(opt_lighting);
-
-	cy += opt_lighting->h() + y_step;
-#endif
-
-
-
-	//----------------
-
 	int dh = kf_h(60);
 
-	Fl_Group *darkish = new Fl_Group(0, H - dh, W, dh);
-	darkish->end();
-	darkish->box(FL_FLAT_BOX);
-	darkish->color(BUILD_BG, BUILD_BG);
-
-	add(darkish);
-
-
-	// finally add an "Close" button
 	int bw = kf_w(60);
 	int bh = kf_h(30);
 	int bx = W - kf_w(40) - bw;
 	int by = H - dh/2 - bh/2;
 
-	Fl_Button *button = new Fl_Button(bx, by, bw, bh, fl_close);
-	button->callback(callback_Quit, this);
-	darkish->add(button);
+	Fl_Group *darkish = new Fl_Group(0, H - dh, W, dh);
+	darkish->box(FL_FLAT_BOX);
+	darkish->color(FL_DARK3, FL_DARK3);
+	{
+		// finally add an "Close" button
+
+		Fl_Button *button = new Fl_Button(bx, by, bw, bh, fl_close);
+		button->callback(callback_Quit, this);
+	}
+	darkish->end();
 
 
 	// restart needed warning
@@ -499,7 +473,11 @@ UI_OptionsWin::UI_OptionsWin(int W, int H, const char *label) :
 						 _("Note: some options require a restart."));
 	heading->align(FL_ALIGN_INSIDE);
 	heading->labelsize(small_font_size);
-	add(heading);
+
+
+	end();
+
+	resizable(NULL);
 }
 
 
@@ -535,9 +513,9 @@ void DLG_OptionsEditor(void)
 	if (! option_window)
 	{
 		int opt_w = kf_w(350);
-		int opt_h = kf_h(380);
+		int opt_h = kf_h(410);
 
-		option_window = new UI_OptionsWin(opt_w, opt_h, _("OBLIGE Options"));
+		option_window = new UI_OptionsWin(opt_w, opt_h, _("OBLIGE Misc Options"));
 	}
 
 	option_window->want_quit = false;

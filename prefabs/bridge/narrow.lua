@@ -1,12 +1,14 @@
 --
--- Narrow wooden bridge
+-- a simple, narrow bridge
 --
 
-PREFABS.Bridge_narrow =
+PREFABS.Bridge_narrow1 =
 {
   file   = "bridge/narrow.wad"
+  map    = "MAP01"
 
-  seed_w = 1
-  seed_h = 2
+  prob   = 90
+
+  where  = "point"
 }
 

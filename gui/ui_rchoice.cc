@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2006-2009 Andrew Apted
+//  Copyright (C) 2006-2016 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -23,10 +23,11 @@
 #include "hdr_ui.h"
 
 #include "lib_util.h"
+#include "main.h"
 
 
 choice_data_c::choice_data_c(const char *_id, const char *_label) :
-	id(NULL), label(NULL), shown(false),
+	id(NULL), label(NULL), enabled(false),
 	mapped(-1), widget(NULL)
 {
 	if (_id)    id    = StringDup(_id);
@@ -39,9 +40,9 @@ choice_data_c::~choice_data_c()
 	if (id)    StringFree(id);
 	if (label) StringFree(label);
 
-	// ignore 'widget' field when shown, we assume it exists in
+	// ignore 'widget' field when enabled, we assume it exists in
 	// an Fl_Group and hence FLTK will take care to delete it.
-	if (! shown)
+	if (! enabled)
 		delete widget;
 }
 
@@ -64,7 +65,7 @@ UI_RChoice::~UI_RChoice()
 }
 
 
-void UI_RChoice::AddPair(const char *id, const char *label)
+void UI_RChoice::AddChoice(const char *id, const char *label)
 {
 	choice_data_c *opt = FindID(id);
 
@@ -73,7 +74,7 @@ void UI_RChoice::AddPair(const char *id, const char *label)
 		StringFree(opt->label);
 		opt->label = StringDup(label);
 
-		if (opt->shown)
+		if (opt->enabled)
 			Recreate();
 	}
 	else
@@ -83,12 +84,12 @@ void UI_RChoice::AddPair(const char *id, const char *label)
 		opt_list.push_back(opt);
 
 		// no need to call Recreate() here since new pairs are always
-		// hidden (shown == false).
+		// hidden (enabled == false).
 	}
 }
 
 
-bool UI_RChoice::ShowOrHide(const char *id, bool new_shown)
+bool UI_RChoice::EnableChoice(const char *id, bool enable_it)
 {
 	SYS_ASSERT(id);
 
@@ -97,9 +98,9 @@ bool UI_RChoice::ShowOrHide(const char *id, bool new_shown)
 	if (! P)
 		return false;
 
-	if (P->shown != new_shown)
+	if (P->enabled != enable_it)
 	{
-		P->shown = new_shown;
+		P->enabled = enable_it;
 		Recreate();
 	}
 
@@ -123,7 +124,7 @@ const char *UI_RChoice::GetLabel() const
 }
 
 
-bool UI_RChoice::SetID(const char *id)
+bool UI_RChoice::ChangeTo(const char *id)
 {
 	SYS_ASSERT(id);
 
@@ -161,7 +162,7 @@ void UI_RChoice::Recreate()
 			continue;
 		}
 
-		if (! P->shown)
+		if (! P->enabled)
 		{
 			P->mapped = -1;
 			continue;
@@ -209,6 +210,62 @@ choice_data_c * UI_RChoice::FindMapped() const
 	return NULL;
 }
 
+
+void UI_RChoice::GotoPrevious()
+{
+	int v = value();
+
+	if (v > 0)
+	{
+		v--; value(v);
+
+		// skip dividers
+		while (v > 0 && (mvalue()->flags & FL_MENU_INACTIVE))
+		{
+			v--; value(v);
+		}
+
+		do_callback();
+	}
+}
+
+
+void UI_RChoice::GotoNext()
+{
+	int v = value();
+	int last = size() - 2;
+
+	if (v < last)
+	{
+		v++; value(v);
+
+		// skip dividers
+		while (v < last && (mvalue()->flags & FL_MENU_INACTIVE))
+		{
+			v++; value(v);
+		}
+
+		do_callback();
+	}
+}
+
+
+int UI_RChoice::handle(int event)
+{
+	if (wheel_can_bump &&
+	    event == FL_MOUSEWHEEL &&
+		Fl::belowmouse() == this)
+	{
+		if (Fl::event_dy() < 0)
+			GotoPrevious();
+		else if (Fl::event_dy() > 0)
+			GotoNext();
+
+		return 1;  // eat it
+	}
+
+	return Fl_Choice::handle(event);
+}
 
 //--- editor settings ---
 // vi:ts=4:sw=4:noexpandtab

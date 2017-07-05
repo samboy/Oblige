@@ -2,7 +2,7 @@
 --  DOOM WEAPONS
 --------------------------------------------------------------------
 --
---  Copyright (C) 2006-2015 Andrew Apted
+--  Copyright (C) 2006-2016 Andrew Apted
 --  Copyright (C)      2011 Chris Pisarczyk
 --
 --  This program is free software; you can redistribute it and/or
@@ -16,19 +16,21 @@
 -- Usable keywords
 -- ===============
 --
--- pref       : usage preference [absent = never]
--- add_prob   : probabiliiy of adding into level [absent = never]
--- dm_prob    : chance of being used in a Death-Match map
+-- id         : editor number used to place weapon on the map
 --
+-- level      : how far along (over episode) it should appear (1..9)
+-- add_prob   : probabiliiy of adding into level [absent = never]
+--
+-- pref       : usage preference [absent = never]
 -- upgrades   : when present, always prefer this weapon over named one
 --              (e.g. always use chaingun instead of the pistol)
 --
 -- rate     : firing rate (shots per second)
 -- accuracy : percentage that a good player will actually hit something
 -- damage   : damage can inflict per shot (maximum possible)
--- splash   : splash damage done to monsters (1st, 2nd, etc)
+-- splash   : splash damage to other monsters (2nd, 3rd, etc)
 --
--- attack : kind of attack (hitscan | missile | melee)
+-- attack : kind of attack: hitscan / missile / melee
 -- ammo   : ammo type [absent for no ammo weapons]
 -- per    : ammo per shot
 -- give   : ammo given when weapon is picked up
@@ -61,7 +63,7 @@ DOOM.WEAPONS =
   shotty =
   {
     id = 2001
-    level = 1
+    level = 1.5
     pref = 40
     add_prob = 40
     attack = "hitscan"
@@ -78,7 +80,7 @@ DOOM.WEAPONS =
   chain =
   {
     id = 2002
-    level = 2
+    level = 1.5
     pref = 70
     upgrades = "pistol"
     add_prob = 40
@@ -92,10 +94,11 @@ DOOM.WEAPONS =
     bonus_ammo = 50
   }
 
+  -- the super shotgun is Doom II only
   super =
   {
     id = 82
-    level = 3
+    level = 2.7
     pref = 40
     upgrades = "shotty"
     add_prob = 70
@@ -132,8 +135,8 @@ DOOM.WEAPONS =
   plasma =
   {
     id = 2004
-    level = 5
-    pref = 40
+    level = 5.2
+    pref = 25
     add_prob = 50
     attack = "missile"
     rate = 11
@@ -148,11 +151,10 @@ DOOM.WEAPONS =
   bfg =
   {
     id = 2006
-    level = 7
-    pref = 20
+    level = 8
+    pref = 12
     upgrades = "plasma"
     add_prob = 20
-    dm_prob = 6
     hide_prob = 35
     attack = "missile"
     rate = 0.8

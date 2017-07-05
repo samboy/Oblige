@@ -4,7 +4,7 @@
 //
 //  Oblige Level Maker
 //
-//  Copyright (C) 2008-2016 Andrew Apted
+//  Copyright (C) 2008-2017 Andrew Apted
 //
 //  This program is free software; you can redistribute it and/or
 //  modify it under the terms of the GNU General Public License
@@ -398,7 +398,7 @@ int DM_fsky_add_stars(lua_State *L)
 
 	lua_pop(L, 4);
 
-	// validation... 
+	// validation...
 	SYS_ASSERT(sky_pixels);
 
 	if (map_id < 1 || map_id > MAX_COLOR_MAPS)
@@ -453,7 +453,7 @@ int DM_fsky_add_clouds(lua_State *L)
 
 	lua_pop(L, 4);
 
-	// validation... 
+	// validation...
 	SYS_ASSERT(sky_pixels);
 
 	if (map_id < 1 || map_id > MAX_COLOR_MAPS)
@@ -516,7 +516,7 @@ int DM_fsky_add_hills(lua_State *L)
 
 	lua_pop(L, 4);
 
-	// validation... 
+	// validation...
 	SYS_ASSERT(sky_pixels);
 
 	if (map_id < 1 || map_id > MAX_COLOR_MAPS)
@@ -889,7 +889,7 @@ static qLump_c * DoLoadLump(int src_entry)
 
 static const char *level_lumps[NUM_LEVEL_LUMPS]=
 {
-	"THINGS", "LINEDEFS", "SIDEDEFS", "VERTEXES", "SEGS", 
+	"THINGS", "LINEDEFS", "SIDEDEFS", "VERTEXES", "SEGS",
 	"SSECTORS", "NODES", "SECTORS", "REJECT", "BLOCKMAP",
 	"BEHAVIOR",  // <-- hexen support
 	"SCRIPTS"  // -JL- Lump with script sources
@@ -1298,6 +1298,10 @@ static rgb_color_t title_palette[256];
 typedef enum
 {
 	REND_Solid = 0,
+	REND_Additive,
+	REND_Subtract,
+	REND_Multiply,
+
 	REND_Textured,
 	REND_Gradient,
 	REND_Gradient3,
@@ -1434,7 +1438,7 @@ static bool TitleCacheImage(const char *filename)
 }
 
 
-static int TitleLookupPixel(int x, int y)
+static int TitleAveragePixel(int x, int y)
 {
 	x *= 3;
 	y *= 3;
@@ -1458,18 +1462,54 @@ static int TitleLookupPixel(int x, int y)
 	g = g / 9;
 	b = b / 9;
 
-	return PaletteLookup(MAKE_RGBA(r, g, b, 255), title_palette);
+	return MAKE_RGBA(r, g, b, 255);
 }
 
 
-int DM_title_write(lua_State *L)
+static qLump_c * TitleCreateTGA()
 {
-	// LUA: title_write(lumpname)
+	qLump_c *lump = new qLump_c();
 
-	const char *lumpname = luaL_checkstring(L, 1);
+	lump->AddByte(0);  // id_length
+	lump->AddByte(0);  // colormap_type
+	lump->AddByte(2);  // TGA_RGB
 
-	SYS_ASSERT(title_pix);
+	lump->AddByte(0);  // colormap_xxx
+	lump->AddByte(0);
+	lump->AddByte(0);
+	lump->AddByte(0);
+	lump->AddByte(0);
 
+	lump->AddByte(0);  // x_offset
+	lump->AddByte(0);
+	lump->AddByte(0);  // y_offset
+	lump->AddByte(0);
+
+	lump->AddByte(title_W & 255);  // width
+	lump->AddByte(title_W >> 8);
+
+	lump->AddByte(title_H & 255);  // height
+	lump->AddByte(title_H >> 8);
+
+	lump->AddByte(24); // pixel_bits
+	lump->AddByte(0);  // attributes
+
+	for (int y = title_H-1 ; y >= 0 ; y--)
+	for (int x = 0 ; x < title_W ; x++)
+	{
+		rgb_color_t col = TitleAveragePixel(x, y);
+
+		lump->AddByte( RGB_BLUE(col));
+		lump->AddByte(RGB_GREEN(col));
+		lump->AddByte(  RGB_RED(col));
+	}
+
+	return lump;
+}
+
+
+static qLump_c * TitleCreatePatch()
+{
 	// convert image to the palette  [ this is very slow! ]
 
 	byte *conv_pixels = new byte[title_W * title_H];
@@ -1477,15 +1517,64 @@ int DM_title_write(lua_State *L)
 	for (int y = 0 ; y < title_H ; y++)
 	for (int x = 0 ; x < title_W ; x++)
 	{
-		conv_pixels[y * title_W + x] = TitleLookupPixel(x, y);
+		rgb_color_t col = TitleAveragePixel(x, y);
+
+		conv_pixels[y * title_W + x] = PaletteLookup(col, title_palette);
 	}
 
 	qLump_c *lump = DM_CreatePatch(title_W, title_H, 0, 0, conv_pixels, title_W, title_H);
 
+	delete[] conv_pixels;
+
+	return lump;
+}
+
+
+static qLump_c * TitleCreateRaw()
+{
+	// convert image to the palette  [ this is very slow! ]
+
+	byte *conv_pixels = new byte[title_W * title_H];
+
+	for (int y = 0 ; y < title_H ; y++)
+	for (int x = 0 ; x < title_W ; x++)
+	{
+		rgb_color_t col = TitleAveragePixel(x, y);
+
+		conv_pixels[y * title_W + x] = PaletteLookup(col, title_palette);
+	}
+
+	qLump_c *lump = new qLump_c;
+
+	lump->Append(conv_pixels, title_W * title_H);
+
+	delete[] conv_pixels;
+
+	return lump;
+}
+
+
+int DM_title_write(lua_State *L)
+{
+	// LUA: title_write(lumpname [, format])
+
+	const char *lumpname = luaL_checkstring(L, 1);
+	const char *format   = luaL_optstring(L, 2, "");
+
+	SYS_ASSERT(title_pix);
+
+	qLump_c *lump;
+
+	if (StringCaseCmp(format, "tga") == 0)
+		lump = TitleCreateTGA();
+	else if (StringCaseCmp(format, "raw") == 0)
+		lump = TitleCreateRaw();
+	else
+		lump = TitleCreatePatch();
+
 	DM_WriteLump(lumpname, lump);
 
 	delete lump;
-	delete conv_pixels;
 
 	return 0;
 }
@@ -1550,6 +1639,12 @@ static void TitleParseRenderMode(const char *what)
 
 	if (strcmp(what, "solid") == 0)
 		title_drawctx.render_mode = REND_Solid;
+	else if (strcmp(what, "additive") == 0)
+		title_drawctx.render_mode = REND_Additive;
+	else if (strcmp(what, "subtract") == 0)
+		title_drawctx.render_mode = REND_Subtract;
+	else if (strcmp(what, "multiply") == 0)
+		title_drawctx.render_mode = REND_Multiply;
 	else if (strcmp(what, "gradient") == 0)
 		title_drawctx.render_mode = REND_Gradient;
 	else if (strcmp(what, "gradient3") == 0)
@@ -1574,7 +1669,10 @@ int DM_title_property(lua_State *L)
 
 	const char *propname = luaL_checkstring(L, 1);
 
-	if (strcmp(propname, "color") == 0 || strcmp(propname, "color1") == 0)
+	if (strcmp(propname, "reset") == 0)
+		title_drawctx.Reset();
+
+	else if (strcmp(propname, "color") == 0 || strcmp(propname, "color1") == 0)
 		title_drawctx.color[0] = Grab_Color(L, 2);
 	else if (strcmp(propname, "color2") == 0)
 		title_drawctx.color[1] = Grab_Color(L, 2);
@@ -1656,6 +1754,49 @@ static inline rgb_color_t CalcGradient(float along)
 }
 
 
+static inline rgb_color_t CalcAdditive(rgb_color_t C1, rgb_color_t C2)
+{
+	int r =   RGB_RED(C1) +   RGB_RED(C2);
+	int g = RGB_GREEN(C1) + RGB_GREEN(C2);
+	int b =  RGB_BLUE(C1) +  RGB_BLUE(C2);
+
+	r = MIN(r, 255);
+	g = MIN(g, 255);
+	b = MIN(b, 255);
+
+	return MAKE_RGBA(r, g, b, 255);
+}
+
+
+static inline rgb_color_t CalcSubtract(rgb_color_t C1, rgb_color_t C2)
+{
+	int r =   RGB_RED(C1) -   RGB_RED(C2);
+	int g = RGB_GREEN(C1) - RGB_GREEN(C2);
+	int b =  RGB_BLUE(C1) -  RGB_BLUE(C2);
+
+	r = MAX(r, 0);
+	g = MAX(g, 0);
+	b = MAX(b, 0);
+
+	return MAKE_RGBA(r, g, b, 255);
+}
+
+
+static inline rgb_color_t CalcMultiply(rgb_color_t C1, rgb_color_t C2)
+{
+	int r =   RGB_RED(C1) * (  RGB_RED(C2) + 1);
+	int g = RGB_GREEN(C1) * (RGB_GREEN(C2) + 1);
+	int b =  RGB_BLUE(C1) * ( RGB_BLUE(C2) + 1);
+
+	r = r >> 8;
+	g = g >> 8;
+	b = b >> 8;
+
+	return MAKE_RGBA(r, g, b, 255);
+}
+
+
+
 static inline rgb_color_t CalcPixel(int x, int y)
 {
 	float along = 0;
@@ -1667,6 +1808,15 @@ static inline rgb_color_t CalcPixel(int x, int y)
 	{
 		case REND_Solid:
 			break;
+
+		case REND_Additive:
+			return CalcAdditive(title_pix[y*title_W3 + x], title_drawctx.color[0]);
+
+		case REND_Subtract:
+			return CalcSubtract(title_pix[y*title_W3 + x], title_drawctx.color[0]);
+
+		case REND_Multiply:
+			return CalcMultiply(title_pix[y*title_W3 + x], title_drawctx.color[0]);
 
 		case REND_Textured:
 			if (! title_last_tga)
@@ -1737,17 +1887,16 @@ static void TDraw_Slash(int x, int y, int w, int dir)
 }
 
 
-static void TDraw_Circle(int x, int y, int w)
+static void TDraw_Circle(int x, int y, int w, int h)
 {
 	int bmx = x + w / 2;
-	int bmy = y + w / 2;
-	int r2  = w * w / 4;
+	int bmy = y + h / 2;
 
 	// clip the box
 	int x1 = x;
 	int y1 = y;
 	int x2 = x + w;
-	int y2 = y + w;
+	int y2 = y + h;
 
 	x1 = MAX(x1, 0);
 	y1 = MAX(y1, 0);
@@ -1761,10 +1910,10 @@ static void TDraw_Circle(int x, int y, int w)
 	for (int y = y1 ; y < y2 ; y++)
 	for (int x = x1 ; x < x2 ; x++)
 	{
-		int dx = x - bmx;
-		int dy = y - bmy;
+		float dx = (x - bmx) / (float)w;
+		float dy = (y - bmy) / (float)h;
 
-		if (dx*dx + dy*dy > r2)
+		if (dx * dx + dy * dy > 0.25)
 			continue;
 
 		title_pix[y * title_W3 + x] = CalcPixel(x, y);
@@ -1777,7 +1926,7 @@ static void TDraw_LinePart(int x, int y)
 	switch (title_drawctx.pen_type)
 	{
 		case PEN_Circle:
-			TDraw_Circle(x, y, title_drawctx.box_w * 3);
+			TDraw_Circle(x, y, title_drawctx.box_w * 3, title_drawctx.box_w * 3);
 			break;
 
 		case PEN_Box:
@@ -2029,6 +2178,22 @@ int DM_title_draw_rect(lua_State *L)
 }
 
 
+int DM_title_draw_disc(lua_State *L)
+{
+	// LUA: title_draw_disc(x, y, w, h)
+
+	int x = luaL_checkint(L, 1);
+	int y = luaL_checkint(L, 2);
+	int w = luaL_checkint(L, 3);
+	int h = luaL_checkint(L, 4);
+
+	SYS_ASSERT(title_pix);
+
+	TDraw_Circle(x*3, y*3, w*3, h*3);
+	return 0;
+}
+
+
 int DM_title_draw_line(lua_State *L)
 {
 	// LUA: title_draw_line(x1, y1, x2, y2)
@@ -2059,6 +2224,217 @@ int DM_title_load_image(lua_State *L)
 
 	return 0;
 }
+
+
+int DM_title_draw_clouds(lua_State *L)
+{
+	// LUA: title_draw_clouds(seed, hue1,hue2,hue3, thresh, power, fracdim)
+
+	int seed = luaL_checkint(L, 1);
+
+	rgb_color_t hue1 = Grab_Color(L, 2);
+	rgb_color_t hue2 = Grab_Color(L, 3);
+	rgb_color_t hue3 = Grab_Color(L, 4);
+
+	double thresh   = luaL_optnumber(L, 5, 0.0);
+	double powscale = luaL_optnumber(L, 6, 1.0);
+	double fracdim  = luaL_optnumber(L, 7, 2.4);
+
+	if (thresh > 0.98)
+		return luaL_error(L, "title_draw_clouds: bad thresh value");
+
+	if (powscale < 0.01)
+		return luaL_error(L, "title_draw_clouds: bad power value");
+
+	if (fracdim > 2.99 || fracdim < 0.2)
+		return luaL_error(L, "title_draw_clouds: bad fracdim value");
+
+	SYS_ASSERT(title_pix);
+	SYS_ASSERT(title_W > 0);
+
+	// create height field
+	// [ it is a square, and size must be a power of two ]
+
+	int W = MAX(title_W, title_H) - 1;
+	for (int k = 0 ; k < 30 ; k++) W |= (W >> 1);
+	W += 1;
+
+	float * synth = new float[W * W];
+
+	TX_SpectralSynth(seed, synth, W, fracdim, powscale);
+
+	for (int y = 0 ; y < title_H ; y++)
+	for (int x = 0 ; x < title_W ; x++)
+	{
+		float src = synth[y * W + x];
+
+		if (src < thresh)
+			continue;
+
+		src = (src - thresh) * 2 / (1.0 - thresh);
+
+		float r, g, b;
+
+		if (src < 1.0)
+		{
+			r =   RGB_RED(hue2) * src +   RGB_RED(hue1) * (1.0 - src);
+			g = RGB_GREEN(hue2) * src + RGB_GREEN(hue1) * (1.0 - src);
+			b =  RGB_BLUE(hue2) * src +  RGB_BLUE(hue1) * (1.0 - src);
+		}
+		else
+		{
+			src = src - 1.0;
+
+			r =   RGB_RED(hue3) * src +   RGB_RED(hue2) * (1.0 - src);
+			g = RGB_GREEN(hue3) * src + RGB_GREEN(hue2) * (1.0 - src);
+			b =  RGB_BLUE(hue3) * src +  RGB_BLUE(hue2) * (1.0 - src);
+		}
+
+		int r2 = CLAMP(0, r, 255);
+		int g2 = CLAMP(0, g, 255);
+		int b2 = CLAMP(0, b, 255);
+
+		rgb_color_t col = MAKE_RGBA(r2, g2, b2, 255);
+
+		for (int dy = 0 ; dy < 3 ; dy++)
+		for (int dx = 0 ; dx < 3 ; dx++)
+		{
+			title_pix[(y*3+dy) * title_W3 + (x*3+dx)] = col;
+		}
+	}
+
+	delete[] synth;
+
+	return 0;
+}
+
+
+int DM_title_draw_planet(lua_State *L)
+{
+	// LUA: title_draw_planet(x,y,r, seed, flags, hue1,hue2,hue3)
+
+#if 0
+	int px = luaL_checkint(L, 1);
+	int py = luaL_checkint(L, 2);
+
+	int ph = luaL_checkint(L, 3);
+	int pw = ph * 5 / 4;
+
+	int seed = luaL_checkint(L, 4);
+
+	const char *flag_str = luaL_checkstring(L, 5);
+
+	rgb_color_t hue1 = Grab_Color(L, 6);
+	rgb_color_t hue2 = Grab_Color(L, 7);
+	rgb_color_t hue3 = Grab_Color(L, 8);
+
+
+	SYS_ASSERT(title_pix);
+
+	px *= 3;  py *= 3;
+	pw *= 3;  ph *= 3;
+
+	// FIXME : clip !!!!
+
+
+	int W = 512;
+
+	float * synth = new float[W * W];
+
+	TX_SpectralSynth(seed, synth, W, 1.8, 1.0);
+
+	// add craters
+	srand(seed);
+
+	if (false)
+	for (int ci = 0 ; ci < 250 ; ci++)
+	{
+		int cr = 8 + (rand() & 63);
+
+		int mx = rand() & 511;
+		int my = rand() & 511;
+
+		for (int dx = -cr ; dx < cr ; dx++)
+		for (int dy = -cr ; dy < cr ; dy++)
+		{
+			if (dx*dx + dy*dy > cr*cr)
+				continue;
+
+			float d = hypot(dx, dy) / (float)cr;
+
+			int sx = (mx + dx) & 511;
+			int sy = (my + dy) & 511;
+
+			synth[sy*W + sx] += 0.3 * (1 - d*d);
+		}
+	}
+
+/*
+for (int ky = 40 ; ky < 110 ; ky++)
+for (int kx = 0   ; kx < W ; kx++)
+{
+	synth[ky*W + kx] -= 0.1;
+}*/
+
+
+	for (int y = py - ph ; y < py + ph ; y++)
+	for (int x = px - pw ; x < px + pw ; x++)
+	{
+		int dx = (x - px) * 4 / 5;
+		int dy = (y - py);
+
+		if (dx * dx + dy * dy > ph * ph)
+			continue;
+
+
+		// coordinate in synthesized noise
+		int tx1 = dx & 511;
+		int tx2 = (dx+1) & 511;
+
+		int ty1 = dy & 511;
+		int ty2 = (dy+1) & 511;
+
+
+		float K  = synth[tx1*W + ty1];
+
+		float T1 = synth[ty1*W + tx2] - synth[ty1*W + tx1];
+		float T2 = synth[ty2*W + tx1] - synth[ty1*W + tx1];
+
+
+		// compute normal at point
+		float nx = dx / (float)ph + T1 * 10;
+		float ny = dy / (float)ph + T2 * 10;
+		float nz = 1.0 - hypot(nx, ny);
+
+
+		rgb_color_t col;
+
+		// TEMP CRUD
+#if 1
+		int ity = 128 + (nx - ny + nz) * 128;
+		ity = CLAMP(0, ity, 255);
+
+		if ((int)(K * 32) & 3)
+			col = MAKE_RGBA(0  , 0  , ity, 255);
+		else
+			col = MAKE_RGBA(0  ,ity ,   0, 255);
+#else
+		// moon colors
+		int ity = 80 + (nx + nx + nx) * 60;
+		ity = CLAMP(0, ity, 255);
+
+		col = MAKE_RGBA(ity, ity, ity, 255);
+#endif
+
+		title_pix[y * title_W3 + x] = col;
+	}
+
+	delete[] synth;
+#endif
+
+	return 0;
+}
+
 
 //--- editor settings ---
 // vi:ts=4:sw=4:noexpandtab
