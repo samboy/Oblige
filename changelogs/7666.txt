@@ -1,9 +1,12 @@
 
-CHANGES IN 7.55
-===============
+CHANGES IN 7.666
+================
 
 +  UI: big revamp, two scrolling columns of modules
 -  UI: main window can be vertically resized
+-  UI: default save filename is the generated title name
+-  UI: remember the previous folder when saving
+
 -  UI: option to use mousewheel to change settings
 -  UI: option to disable the overwrite-file warning
 -  UI: the "Use" button in config manager now sets the seed too
@@ -16,8 +19,6 @@ CHANGES IN 7.55
 
 +  hallways
 
-+  sky generator: much better looking mountains
-
 +  more variety of window prefabs
 
 +  ensure a secret exit can always be placed
@@ -25,10 +26,9 @@ CHANGES IN 7.55
 -  support secret weapons (available earlier than usual)
 
 +  add barrels, blood and corpses to rooms
-
 -  fixed large teleport-in monsters getting stuck
-
 -  support for the Quake3 map format in the CSG code
+-  sky generator makes better looking mountains
 
 -  new "Ramp Up" and "Bosses" buttons for monster panel
 -  new themes: "Bit Mixed", "Original-ish", "Episode-ish"

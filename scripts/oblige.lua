@@ -978,6 +978,29 @@ function ob_game_format()
 end
 
 
+
+function ob_default_filename()
+  -- create a default filename [ WITHOUT any extension ]
+
+  assert(OB_CONFIG)
+  assert(OB_CONFIG.game)
+
+  gui.rand_seed(OB_CONFIG.seed + 0)
+
+  Naming_init()
+
+  OB_CONFIG.title = Naming_grab_one("TITLE")
+
+  -- massage into a usable filename
+  local str = string.lower(OB_CONFIG.title)
+
+  str = string.gsub(str, "%p", "")
+  str = string.gsub(str, " ", "_")
+
+  return str
+end
+
+
 ------------------------------------------------------------------------
 
 
@@ -1157,6 +1180,12 @@ end
 
 function ob_build_setup()
   ob_clean_up()
+
+  Naming_init()
+
+  if OB_CONFIG.title then
+    GAME.title = OB_CONFIG.title
+  end
 
   ob_transfer_ui_options()
 

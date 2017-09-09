@@ -73,9 +73,9 @@ static void Parse_Option(const char *name, const char *value)
 	{
 		debug_messages = atoi(value) ? true : false;
 	}
-	else if (StringCaseCmp(name, "last_file") == 0)
+	else if (StringCaseCmp(name, "last_directory") == 0)
 	{
-//???		UI_SetLastFile(value);
+		last_directory = StringDup(value);
 	}
 	else
 	{
@@ -208,7 +208,12 @@ bool Options_Save(const char *filename)
 	fprintf(option_fp, "overwrite_warning = %d\n", overwrite_warning ? 1 : 0);
 	fprintf(option_fp, "debug_messages = %d\n", debug_messages ? 1 : 0);
 
-//???	fprintf(option_fp, "last_file = %s\n", UI_GetLastFile());
+	if (last_directory)
+	{
+		fprintf(option_fp, "\n");
+		fprintf(option_fp, "last_directory = %s\n", last_directory);
+	}
+
 	fprintf(option_fp, "\n");
 
 	VFS_OptWrite(option_fp);
@@ -407,7 +412,7 @@ UI_OptionsWin::UI_OptionsWin(int W, int H, const char *label) :
 
 
 	opt_wheel_bump = new Fl_Check_Button(cx, cy, W-cx-pad, kf_h(24), _(" Change Settings via Mouse Wheel"));
-	opt_wheel_bump->value(alternate_look ? 1 : 0);
+	opt_wheel_bump->value(wheel_can_bump ? 1 : 0);
 	opt_wheel_bump->callback(callback_AltLook, this);
 
 	cy += opt_wheel_bump->h() + y_step;
