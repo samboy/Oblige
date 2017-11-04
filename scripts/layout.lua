@@ -1322,6 +1322,15 @@ function Layout_decorate_rooms(pass)
     if R.is_start then return end
     if R.is_exit  then return end
 
+    -- when there is an alternate start room, ensure we don't block the
+    -- path of a single player (who may begin on the wrong side).
+    if LEVEL.alt_start and
+       (R.zone == LEVEL.start_room.zone or
+        R.zone == LEVEL.alt_start.zone)
+    then
+      return
+    end
+
     local conn_list = {}
 
     each C in R.conns do
@@ -1558,6 +1567,8 @@ function Layout_decorate_rooms(pass)
 
   local function switch_up_room(R)
     -- locking exits and items
+
+    if THEME.no_switches then return end
 
     local switch_prob = style_sel("switches", 0, 20, 40, 80)
 

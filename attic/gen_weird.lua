@@ -18,7 +18,7 @@ SHOW_STAIRCASE = false
 ALLOW_CLOSED_SQUARES = true
 
 -- lower this to make larger areas
-T_BRANCH_PROB = 55
+T_BRANCH_PROB = 65
 
 
 if arg[1] then
@@ -47,8 +47,8 @@ end
 
 GRID = {}
 
-GRID_W = 46
-GRID_H = 28
+GRID_W = 56
+GRID_H = 38
 
 
 function create_points()
@@ -360,7 +360,7 @@ end
 
 
 function save_as_svg()
-  local SIZE = 20
+  local SIZE = 16
 
   local fp = io.open("_weird.svg", "w")
 
